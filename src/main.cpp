@@ -5,6 +5,8 @@
 #include <ESP32Servo.h>
 #include <math.h>
 
+#include "net.h"  // WiFi + ThingSpeak (telemetry upload + command poll)
+
 //Servo set up
 Servo myServo;
 #define SERVOPIN 23
@@ -94,6 +96,22 @@ void setup() {
 
   //Servo
   myServo.attach(SERVOPIN);
+
+  //Network: WiFi + ThingSpeak
+  netBegin();
+}
+
+//Maps the local TimeState enum to the ThingSpeak field5 encoding
+//(0 day, 1 rising, 2 wake, 3 winddown, 4 bed).
+int tsTimeState(TimeState s) {
+  switch (s) {
+    case day:      return 0;
+    case rising:   return 1;
+    case wake:     return 2;
+    case winddown: return 3;
+    case bed:      return 4;
+  }
+  return 0;
 }
 
 void loop() {
@@ -201,6 +219,24 @@ void loop() {
     digitalWrite(HOTLEDPIN, LOW);
     Serial.println("Good Temperature!");
   }
+
+  //Network layer: push telemetry, pull remote commands (both rate-limited
+  //inside netTick). NOTE: LDRPIN (GPIO4) is on ADC2, which the ESP32
+  //cannot sample while WiFi is active - ldrval will read 0 here until the
+  //LDR is moved to an ADC1 pin (32-39). Tracked as firmware task #1.
+  Telemetry tele;
+  tele.temperature  = temperature;
+  tele.humidity     = humidity;
+  tele.light        = 100.0f * ldrval / 4095.0f;
+  tele.climateState = (int)state;
+  tele.timeState    = tsTimeState(timeState);
+  tele.motion       = (PIRval == HIGH);
+
+  Command cmd = netTick(tele);
+  //TODO(firmware team): apply `cmd` (mode / setpoints / blinds / lights
+  //overrides) to the control logic above once task #1 lands. For now the
+  //remote command is fetched and logged only.
+  (void)cmd;
 
   //Time Based Rules Using RTC
   if (timeState == rising && faded == false) {

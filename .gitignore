@@ -1,3 +1,6 @@
 .pio/
 .vscode/
 !.vscode/extensions.json
+
+# Secrets: WiFi + ThingSpeak keys. Copy config.h.example -> config.h
+src/config.h
