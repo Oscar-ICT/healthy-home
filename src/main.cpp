@@ -228,17 +228,10 @@ void ConnectToMqtt()
 }
 
 //MQTT Publish function
-void PublishDhtReadings()
+//Takes the readings already taken this loop() iteration instead of
+//re-reading the DHT22 (loop() already validated they're not NaN).
+void PublishDhtReadings(float temperature, float humidity)
 {
-  float temperature = dht.readTemperature();
-  float humidity = dht.readHumidity();
-
-  if (isnan(temperature) || isnan(humidity))
-  {
-    Serial.println("Failed to read from DHT22 sensor.");
-    return;
-  }
-
   char temperatureText[10];
   char humidityText[10];
 
@@ -265,8 +258,6 @@ void PublishDhtReadings()
 void setup() {
   Serial.begin(115200);
   delay(1000);
-
-  dht.begin();
 
   //OLED display (shares the I2C bus with the RTC - SDA=21, SCL=22)
   Wire.begin();
@@ -419,12 +410,6 @@ void loop() {
     return;
   }
 
-  // LDR sensor error check
-  if (isnan(ldrval)){ //Prevents read failure
-    Serial.println("Failed to read from LDR sensor");
-    return;
-  }
-
   //Air con state management
   switch (state) {
     case cooling:
@@ -569,7 +554,7 @@ void loop() {
   if (nowMQTT - lastDhtPublishTime >= DHT_PUBLISH_INTERVAL_MS)
   {
     lastDhtPublishTime = nowMQTT;
-    PublishDhtReadings();
+    PublishDhtReadings(temperature, humidity);
   }
 
   //Network layer: push telemetry, pull remote commands (both rate-limited
