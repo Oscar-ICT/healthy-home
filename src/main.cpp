@@ -7,6 +7,9 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <DHTesp.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
 // Node Red Connection
 const char *WIFI_SSID = "Wokwi-GUEST";
@@ -65,6 +68,17 @@ int PIRval = 0;
 enum TimeState {rising, wake, winddown, bed, day};
 TimeState timeState = day;
 
+const char* timeStateName(TimeState s) {
+  switch (s) {
+    case rising:   return "RISING";
+    case wake:     return "WAKE";
+    case winddown: return "WINDDOWN";
+    case bed:      return "BED";
+    case day:      return "DAY";
+  }
+  return "?";
+}
+
 //Alarm
 int BUZZERPIN = 25;
 
@@ -88,6 +102,40 @@ const float DEMO_CYCLE_MINUTES = 4.0f;
 const float DEMO_SPEED = (24.0f * 60.0f * 60.0f) / (DEMO_CYCLE_MINUTES * 60.0f); // simulated seconds per real second
 const DateTime DEMO_START(2026, 8, 26, 0, 0, 0);
 unsigned long demoClockBaseMillis = 0; // shifted forward to "pause" the demo clock during blocking network calls
+
+//OLED display: shows the (demo) clock + current time-of-day phase so the
+//cycle can be followed at a glance during a demo instead of the serial
+//monitor. Shares the I2C bus with the RTC (SDA=21, SCL=22).
+#define OLED_WIDTH 128
+#define OLED_HEIGHT 64
+Adafruit_SSD1306 display(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
+bool oledReady = false;
+
+void updateDisplay(const DateTime& now, TimeState ts) {
+  if (!oledReady) return;
+
+  char clockText[9];
+  snprintf(clockText, sizeof(clockText), "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
+
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+
+  display.setTextSize(2);
+  display.setCursor(0, 0);
+  display.println(clockText);
+
+  display.setTextSize(2);
+  display.setCursor(0, 28);
+  display.println(timeStateName(ts));
+
+#if DEMO_MODE
+  display.setTextSize(1);
+  display.setCursor(0, 54);
+  display.println("DEMO MODE");
+#endif
+
+  display.display();
+}
 
 //MQTT Communication
 String CreateMqttClientId()
@@ -220,6 +268,16 @@ void setup() {
 
   dht.begin();
 
+  //OLED display (shares the I2C bus with the RTC - SDA=21, SCL=22)
+  Wire.begin();
+  oledReady = display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  if (!oledReady) {
+    Serial.println("SSD1306 init failed - continuing without display");
+  } else {
+    display.clearDisplay();
+    display.display();
+  }
+
   //Air Conditioner Pins
   pinMode(HOTLEDPIN, OUTPUT);
   pinMode(COLDLEDPIN, OUTPUT);
@@ -350,6 +408,8 @@ void loop() {
   } else {
     timeState = day;
   }
+
+  updateDisplay(now, timeState);
 
   // Sensor error checks (may need to include all sensors in the future)
 

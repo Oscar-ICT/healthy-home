@@ -94,7 +94,14 @@
       "rotate": 90,
       "attrs": { "value": "1000" }
     },
-    { "type": "wokwi-servo", "id": "servo1", "top": -174.8, "left": 691.2, "attrs": {} }
+    { "type": "wokwi-servo", "id": "servo1", "top": -174.8, "left": 691.2, "attrs": {} },
+    {
+      "type": "board-ssd1306",
+      "id": "oled1",
+      "top": 180,
+      "left": -260,
+      "attrs": { "i2cAddress": "0x3c" }
+    }
   ],
   "connections": [
     [ "esp:TX", "$serialMonitor:RX", "", [] ],
@@ -134,7 +141,11 @@
     [ "r1:2", "bb2:tn.16", "black", [ "v104.5" ] ],
     [ "bb2:bp.21", "servo1:V+", "red", [ "v-58.5", "h68.8", "v-240", "h38.4" ] ],
     [ "bb2:tn.5", "servo1:GND", "black", [ "v-48.1", "h289.6", "v-96" ] ],
-    [ "esp:23", "servo1:PWM", "orange", [ "h153.6", "v-76.8", "h422.4", "v-67.4" ] ]
+    [ "esp:23", "servo1:PWM", "orange", [ "h153.6", "v-76.8", "h422.4", "v-67.4" ] ],
+    [ "esp:21", "oled1:SDA", "green", [] ],
+    [ "esp:22", "oled1:SCL", "green", [] ],
+    [ "esp:3V3", "oled1:VCC", "gold", [] ],
+    [ "oled1:GND", "bb2:tn.9", "black", [] ]
   ],
   "dependencies": {}
 }
