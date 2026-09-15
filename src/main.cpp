@@ -11,6 +11,10 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
+// Everything "edge ai" related for the marks here
+#include "decision_tree.h"
+#include "decision_tree_trainer.h"
+
 // Node Red Connection
 const char *WIFI_SSID = "Wokwi-GUEST";
 const char *WIFI_PASSWORD = "";
@@ -265,6 +269,83 @@ void PublishDhtReadings(float temperature, float humidity)
   Serial.println((temperaturePublished && humidityPublished) ? "success" : "failed");
 }
 
+// ---- Occupancy edge-AI: calibration + live prediction -------------------
+// GPIO4 -> button -> GND (uses the internal pull-up, so idle = HIGH,
+// pressed = LOW). Short press toggles which label new samples get;
+// holding it down for LONG_PRESS_MS trains the tree from whatever's
+// been collected and switches from CALIBRATING to RUNNING.
+#define CALIB_BUTTON_PIN 4
+const unsigned long LONG_PRESS_MS = 1500;
+const unsigned long SAMPLE_INTERVAL_MS = 2000;
+const unsigned long OCC_MOTION_HOLD_MS = 30000;
+
+DecisionTreeTrainer<150, 4> occupancyTrainer;   // features: motionRecent, light, temperature, humidity
+DecisionTreeClassifier* occupancyClassifier = nullptr;
+
+enum OccupancyMode { CALIBRATING, RUNNING };
+OccupancyMode occupancyMode = CALIBRATING;
+
+uint8_t currentLabel = 0;  // 0 = empty, 1 = occupied - toggled by short button press
+unsigned long lastSampleMillis = 0;
+unsigned long buttonDownMillis = 0;
+bool buttonWasDown = false;
+
+unsigned long lastMotionMillis = 0;
+bool everSeenMotion = false;
+
+// Short press: toggle which label new samples get. Long press: stop
+// collecting and train the tree from everything gathered so far.
+void handleCalibrationButton() {
+  bool down = (digitalRead(CALIB_BUTTON_PIN) == LOW);
+
+  if (down && !buttonWasDown) buttonDownMillis = millis();
+
+  if (!down && buttonWasDown) {
+    unsigned long heldFor = millis() - buttonDownMillis;
+    if (heldFor >= LONG_PRESS_MS) {
+      size_t n = occupancyTrainer.train(4, 3);
+      if (n > 0) {
+        if (occupancyClassifier != nullptr) delete occupancyClassifier;
+        occupancyClassifier = new DecisionTreeClassifier(occupancyTrainer.nodes(), n);
+        occupancyMode = RUNNING;
+        Serial.print("[occupancy] trained, "); Serial.print(n); Serial.println(" nodes. Now RUNNING.");
+      } else {
+        Serial.println("[occupancy] not enough samples yet - keep calibrating.");
+      }
+    } else {
+      currentLabel = 1 - currentLabel;
+      Serial.print("[occupancy] labeling as: ");
+      Serial.println(currentLabel == 1 ? "OCCUPIED" : "EMPTY");
+    }
+  }
+  buttonWasDown = down;
+}
+
+// Call once per loop() with the current sensor readings. While
+// CALIBRATING, banks a labeled sample every SAMPLE_INTERVAL_MS. Once
+// RUNNING, predicts occupancy from the trained tree.
+void updateOccupancy(float temperature, float humidity, float lightPct, bool pirHigh) {
+  if (pirHigh) { lastMotionMillis = millis(); everSeenMotion = true; }
+  float motionRecent = (everSeenMotion && (millis() - lastMotionMillis < OCC_MOTION_HOLD_MS)) ? 1.0f : 0.0f;
+  float features[4] = { motionRecent, lightPct, temperature, humidity };
+
+  if (occupancyMode == CALIBRATING) {
+    unsigned long nowMs = millis();
+    if (nowMs - lastSampleMillis >= SAMPLE_INTERVAL_MS) {
+      lastSampleMillis = nowMs;
+      bool ok = occupancyTrainer.addSample(features, currentLabel);
+      Serial.print("[occupancy] sample #"); Serial.print(occupancyTrainer.sampleCount());
+      Serial.print(" label="); Serial.println(currentLabel == 1 ? "OCCUPIED" : "EMPTY");
+      if (!ok) Serial.println("[occupancy] buffer full - hold button to train now.");
+    }
+  } else {
+    bool occupied = (occupancyClassifier->predict(features) == 1);
+    Serial.print("[occupancy] prediction: "); Serial.println(occupied ? "OCCUPIED" : "EMPTY");
+    // TODO: feed `occupied` into the automation rules below (e.g. only
+    // let PIR-driven behaviour during bed/winddown act if occupied).
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
@@ -288,6 +369,10 @@ void setup() {
 
   //Buzzer pin
   pinMode(BUZZERPIN, OUTPUT);
+
+  //Occupancy calibration button
+  pinMode(CALIB_BUTTON_PIN, INPUT_PULLUP);
+  Serial.println("[occupancy] CALIBRATING: short-press toggles label, long-press (>1.5s) trains.");
 
   //MQTT setup
   SetupDht();
@@ -332,7 +417,7 @@ void setup() {
   //Servo
   myServo.attach(SERVOPIN);
 
-  //Network: WiFi + ThingSpeak
+  //Network: WiFi + ThingSpeak (spawns the net task on core 0)
   netBegin();
 }
 
@@ -547,9 +632,11 @@ void loop() {
     PublishDhtReadings(temperature, humidity);
   }
 
-  //Network layer: push telemetry, pull remote commands (both rate-limited
-  //inside netTick). LDRPIN is now GPIO32 (ADC1), which is unaffected by
-  //WiFi, so ldrval reads correctly here.
+  //Network layer: hand off the latest sample and read back the latest
+  //command. Both are just mutex-protected struct copies now - the
+  //actual blocking HTTPS calls happen on the net task on core 0, so
+  //this never stalls the demo clock and the old MAX_UNCOMPENSATED_MS
+  //compensation hack is no longer needed.
   Telemetry tele;
   tele.temperature  = temperature;
   tele.humidity     = humidity;
@@ -558,32 +645,15 @@ void loop() {
   tele.timeState    = tsTimeState(timeState);
   tele.motion       = (PIRval == HIGH);
 
-  // Blocking HTTPS calls to ThingSpeak (TLS handshake included) can take
-  // several real seconds. Three approaches so far:
-  //  - hiding ALL of it from the demo clock made a lap take ~3x longer
-  //    in real time than DEMO_CYCLE_MINUTES;
-  //  - hiding NONE of it caused single-tick jumps of over an hour of
-  //    sim-time - large enough to leap clean over the 1-hour-wide
-  //    RISING/WINDDOWN windows and skip them entirely;
-  //  - hiding only a small FIXED amount (e.g. 2000ms) barely helped: a
-  //    ~10s stall still left ~8s uncompensated, which is what actually
-  //    becomes the jump - the cap needs to bound the leftover, not the
-  //    hidden part.
-  // So: hide everything past MAX_UNCOMPENSATED_MS, letting only that
-  // small remainder count. A jump is now bounded to ~MAX_UNCOMPENSATED_MS
-  // worth of sim-time (a few sim-minutes) - far too small to skip an
-  // hour-wide state - while total lap duration only grows by
-  // MAX_UNCOMPENSATED_MS per network call instead of ballooning.
-  const unsigned long MAX_UNCOMPENSATED_MS = 500;
-  unsigned long uploadStart = millis();
-  Command cmd = netTick(tele);
-  unsigned long uploadDuration = millis() - uploadStart;
-  if (uploadDuration > MAX_UNCOMPENSATED_MS) {
-    demoClockBaseMillis += uploadDuration - MAX_UNCOMPENSATED_MS;
-  }
+  netUpdateTelemetry(tele);
+  Command cmd = netGetCommand();
 
   //TODO(firmware team): apply `cmd` (mode / setpoints / blinds / lights
   //overrides) to the control logic above once task #1 lands. For now the
   //remote command is fetched and logged only.
   (void)cmd;
+
+  //Edge AI: occupancy calibration/prediction (button on CALIB_BUTTON_PIN)
+  handleCalibrationButton();
+  updateOccupancy(temperature, humidity, tele.light, PIRval == HIGH);
 }

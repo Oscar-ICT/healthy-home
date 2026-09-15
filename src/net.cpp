@@ -5,6 +5,9 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
 
 namespace {
 
@@ -12,9 +15,17 @@ const char* TS_BASE = "https://api.thingspeak.com";
 
 WiFiClientSecure secure;
 
-// Sensible defaults so the firmware has something to run with before the
-// first successful poll (matches the constants in main.cpp).
-Command lastCmd = {0, 21.0f, 18.0f, 24.0f, 0, 0, false};
+// Shared state - written by the net task, read by loop() (or vice
+// versa for telemetry). Each has its own mutex so a read/write on one
+// never has to wait on the other.
+Telemetry sharedTelemetry = {0, 0, 0, 0, 0, false};
+bool telemetryReady = false;
+SemaphoreHandle_t telemetryMutex = nullptr;
+
+Command sharedCommand = {0, 21.0f, 18.0f, 24.0f, 0, 0, false};
+SemaphoreHandle_t commandMutex = nullptr;
+
+TaskHandle_t netTaskHandle = nullptr;
 
 unsigned long lastUpload  = 0;
 unsigned long lastPoll    = 0;
@@ -68,6 +79,9 @@ void uploadTelemetry(const Telemetry& t) {
   https.end();
 }
 
+// Polls the control channel and, on success, writes straight into
+// sharedCommand under commandMutex (fields that come back empty keep
+// their previous value, same as before).
 void pollCommands() {
   String url = String(TS_BASE) + "/channels/" + String(TS_CONTROL_CHANNEL_ID) +
                "/feeds/last.json?api_key=" + TS_CONTROL_READ_KEY;
@@ -103,6 +117,8 @@ void pollCommands() {
     return;
   }
 
+  xSemaphoreTake(commandMutex, portMAX_DELAY);
+
   // ThingSpeak returns each field as a string, or null when never set.
   auto num = [&](const char* key, float fallback) -> float {
     JsonVariant v = doc[key];
@@ -110,22 +126,61 @@ void pollCommands() {
     return v.as<String>().toFloat();
   };
 
-  lastCmd.mode        = (int)num("field1", lastCmd.mode);
-  lastCmd.desiredTemp =      num("field2", lastCmd.desiredTemp);
-  lastCmd.minTemp     =      num("field3", lastCmd.minTemp);
-  lastCmd.maxTemp     =      num("field4", lastCmd.maxTemp);
-  lastCmd.blinds      = (int)num("field5", lastCmd.blinds);
-  lastCmd.lights      = (int)num("field6", lastCmd.lights);
-  lastCmd.valid = true;
+  sharedCommand.mode        = (int)num("field1", sharedCommand.mode);
+  sharedCommand.desiredTemp =      num("field2", sharedCommand.desiredTemp);
+  sharedCommand.minTemp     =      num("field3", sharedCommand.minTemp);
+  sharedCommand.maxTemp     =      num("field4", sharedCommand.maxTemp);
+  sharedCommand.blinds      = (int)num("field5", sharedCommand.blinds);
+  sharedCommand.lights      = (int)num("field6", sharedCommand.lights);
+  sharedCommand.valid = true;
+
+  Command logCopy = sharedCommand;
+  xSemaphoreGive(commandMutex);
 
   Serial.printf("[net] command: mode=%d desired=%.1f min=%.1f max=%.1f blinds=%d lights=%d\n",
-                lastCmd.mode, lastCmd.desiredTemp, lastCmd.minTemp,
-                lastCmd.maxTemp, lastCmd.blinds, lastCmd.lights);
+                logCopy.mode, logCopy.desiredTemp, logCopy.minTemp,
+                logCopy.maxTemp, logCopy.blinds, logCopy.lights);
+}
+
+// Runs on core 0 for the life of the program. Everything blocking
+// (WiFi reconnects, both HTTPS calls) happens only in here, so loop()
+// on core 1 never stalls on the network.
+void netTaskFn(void* /*pvParameters*/) {
+  for (;;) {
+    ensureWifi();
+
+    if (WiFi.status() == WL_CONNECTED) {
+      unsigned long now = millis();
+
+      if (lastUpload == 0 || now - lastUpload >= TS_UPLOAD_INTERVAL_MS) {
+        lastUpload = now;
+        Telemetry snapshot;
+        bool haveSample;
+        xSemaphoreTake(telemetryMutex, portMAX_DELAY);
+        snapshot = sharedTelemetry;
+        haveSample = telemetryReady;
+        xSemaphoreGive(telemetryMutex);
+        if (haveSample) uploadTelemetry(snapshot);
+      }
+
+      if (lastPoll == 0 || now - lastPoll >= TS_POLL_INTERVAL_MS) {
+        lastPoll = now;
+        pollCommands();
+      }
+    }
+
+    // Small yield so this task doesn't starve WiFi/lower-priority
+    // tasks on the same core between its rate-limited HTTPS calls.
+    vTaskDelay(pdMS_TO_TICKS(50));
+  }
 }
 
 }  // namespace
 
 void netBegin() {
+  telemetryMutex = xSemaphoreCreateMutex();
+  commandMutex   = xSemaphoreCreateMutex();
+
   WiFi.mode(WIFI_STA);
   // main.cpp's own ConnectToWiFi() (for MQTT) usually already connects
   // before this runs. Re-calling WiFi.begin() on an already-connected
@@ -140,27 +195,24 @@ void netBegin() {
   // to get real server authentication for the Security section.
   secure.setInsecure();
 
-  Serial.println("[net] started, connecting to WiFi");
+  // Pinned to core 0 (the network/protocol core) so it never contends
+  // with loop() on core 1 for CPU time.
+  xTaskCreatePinnedToCore(netTaskFn, "netTask", 8192, nullptr, 1, &netTaskHandle, 0);
+
+  Serial.println("[net] started, net task running on core 0");
 }
 
-Command netTick(const Telemetry& t) {
-  ensureWifi();
-
-  if (WiFi.status() == WL_CONNECTED) {
-    unsigned long now = millis();
-    if (lastUpload == 0 || now - lastUpload >= TS_UPLOAD_INTERVAL_MS) {
-      lastUpload = now;
-      uploadTelemetry(t);
-    }
-    if (lastPoll == 0 || now - lastPoll >= TS_POLL_INTERVAL_MS) {
-      lastPoll = now;
-      pollCommands();
-    }
-  }
-
-  return lastCmd;
+void netUpdateTelemetry(const Telemetry& t) {
+  xSemaphoreTake(telemetryMutex, portMAX_DELAY);
+  sharedTelemetry = t;
+  telemetryReady = true;
+  xSemaphoreGive(telemetryMutex);
 }
 
-Command netLastCommand() {
-  return lastCmd;
+Command netGetCommand() {
+  Command c;
+  xSemaphoreTake(commandMutex, portMAX_DELAY);
+  c = sharedCommand;
+  xSemaphoreGive(commandMutex);
+  return c;
 }

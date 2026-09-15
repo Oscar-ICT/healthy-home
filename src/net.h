@@ -24,14 +24,18 @@ struct Command {
   bool  valid;
 };
 
-// Call once from setup().
+// Call once from setup(). Brings up WiFi if needed and spawns a
+// dedicated FreeRTOS task (pinned to core 0) that owns every blocking
+// HTTPS call to ThingSpeak. Nothing on the calling core ever blocks on
+// the network after this returns.
 void netBegin();
 
-// Call every loop(). Non-blocking except for the throttled HTTPS
-// requests (~<5 s worst case). Handles WiFi (re)connect, and the
-// rate-limited telemetry upload + command poll. Returns the latest
-// known command.
-Command netTick(const Telemetry& t);
+// Call every loop() iteration with the latest sensor sample. Just takes
+// a mutex and copies a small struct - not the HTTPS call itself - so
+// it's effectively instant and safe to call from the main loop every
+// tick. The net task picks it up next time an upload is due.
+void netUpdateTelemetry(const Telemetry& t);
 
-// Latest command without triggering a refresh.
-Command netLastCommand();
+// Thread-safe snapshot of the latest command received from the control
+// channel. Also just a mutex + struct copy - safe to call every tick.
+Command netGetCommand();
