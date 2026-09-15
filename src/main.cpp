@@ -77,10 +77,17 @@ bool faded = false;
 const int fadeSpeed = 10;
 unsigned long previousPWMTime = 0;
 
-// Simulation of system
-DateTime simulatedTime(2026, 8, 26, 0, 0, 0);
-unsigned long simulatedMillis = 0;
-const unsigned long SIMULATION_SPEED = 1;
+// ---- Sped-up demo clock ------------------------------------------------
+// Compresses a full 24h day into DEMO_CYCLE_MINUTES of real time so every
+// time-based behaviour (rising/wake/day/winddown/bed - fades, buzzer,
+// servo, PIR night lighting) plays out inside a short demo/interview
+// slot instead of waiting for a real day to pass. Loops back to 00:00
+// automatically. Set DEMO_MODE to 0 to run on the real DS3231 RTC.
+#define DEMO_MODE 1
+const float DEMO_CYCLE_MINUTES = 4.0f;
+const float DEMO_SPEED = (24.0f * 60.0f * 60.0f) / (DEMO_CYCLE_MINUTES * 60.0f); // simulated seconds per real second
+const DateTime DEMO_START(2026, 8, 26, 0, 0, 0);
+unsigned long demoClockBaseMillis = 0; // shifted forward to "pause" the demo clock during blocking network calls
 
 //MQTT Communication
 String CreateMqttClientId()
@@ -229,6 +236,16 @@ void setup() {
   SetupMqtt();
   ConnectToMqtt();
 
+#if DEMO_MODE
+  // Demo mode drives the clock from millis(), not the DS3231 - no RTC
+  // hardware dependency, so a missing/faulty RTC can't hang the demo.
+  demoClockBaseMillis = millis();
+  Serial.print("DEMO MODE: 24h compressed into ");
+  Serial.print(DEMO_CYCLE_MINUTES);
+  Serial.print(" min (");
+  Serial.print(DEMO_SPEED, 0);
+  Serial.println("x speed), loops back to 00:00 automatically");
+#else
   //RTC connection check
   if(!rtc.begin()){
     while(1);
@@ -244,9 +261,7 @@ void setup() {
   //rtc.adjust(DateTime(2026,8,26,9,0,0)); //Un comment for 9am (day)
   //rtc.adjust(DateTime(2026,8,26,20,0,0)); //Un comment for 8:01pm (winddown)
   Serial.println("RTC initialised");
-
-  // Simulated time cycle
-  simulatedMillis = millis();
+#endif
 
   //PIR
   pinMode(PIRLEDPIN, OUTPUT);
@@ -292,17 +307,16 @@ void loop() {
   //Air con values
   float hysteresis = 1.0;
 
-  //RTC
+  //RTC (or the sped-up demo clock - see DEMO_MODE above)
+#if DEMO_MODE
+  unsigned long elapsedRealMs = millis() - demoClockBaseMillis;
+  uint32_t simSeconds = (uint32_t)((elapsedRealMs / 1000.0f) * DEMO_SPEED);
+  simSeconds %= 86400UL; // wraps back to 00:00 after one simulated day
+  DateTime now = DEMO_START + TimeSpan((int32_t)simSeconds);
+#else
   DateTime now = rtc.now();
+#endif
 
-  //RTC simulation
-  /*
-  unsigned long elapsedSeconds = (millis() - simulatedMillis) / 1000;
-
-  unsigned long simulatedMinutes = elapsedSeconds * SIMULATION_SPEED;
-
-  DateTime now = simulatedTime + TimeSpan(0, 0, simulatedMinutes, 0);
-  */
   //LDR
   int ldrval = analogRead(LDRPIN);
   
@@ -499,9 +513,8 @@ void loop() {
   }
 
   //Network layer: push telemetry, pull remote commands (both rate-limited
-  //inside netTick). NOTE: LDRPIN (GPIO4) is on ADC2, which the ESP32
-  //cannot sample while WiFi is active - ldrval will read 0 here until the
-  //LDR is moved to an ADC1 pin (32-39). Tracked as firmware task #1.
+  //inside netTick). LDRPIN is now GPIO32 (ADC1), which is unaffected by
+  //WiFi, so ldrval reads correctly here.
   Telemetry tele;
   tele.temperature  = temperature;
   tele.humidity     = humidity;
@@ -515,9 +528,13 @@ void loop() {
 
   Command cmd = netTick(tele);
 
-  // Network time removed from simulation
+  // Blocking HTTPS calls can take a couple of seconds; without this the
+  // demo clock would silently "lose" that time on every upload/poll and
+  // drift out of sync with the elapsed real time. Shifting the base
+  // forward excludes it, so the demo clock only counts time spent
+  // actually running the local simulation.
   unsigned long uploadDuration = millis() - uploadStart;
-  simulatedMillis += uploadDuration;
+  demoClockBaseMillis += uploadDuration;
 
   //TODO(firmware team): apply `cmd` (mode / setpoints / blinds / lights
   //overrides) to the control logic above once task #1 lands. For now the
