@@ -558,16 +558,23 @@ void loop() {
   tele.timeState    = tsTimeState(timeState);
   tele.motion       = (PIRval == HIGH);
 
-  // NOTE: this used to shift demoClockBaseMillis forward by however long
-  // netTick() blocked, so the demo clock wouldn't "lose" that time. But
-  // ThingSpeak's TLS handshake can take several real seconds, and
-  // excluding all of it made one 24h lap take ~3x longer in real time
-  // than DEMO_CYCLE_MINUTES - defeating the point of fitting a demo
-  // slot. Letting it count as normal elapsed time keeps the total real
-  // duration of a lap pinned close to DEMO_CYCLE_MINUTES; the trade-off
-  // is an occasional visible jump in the displayed clock right after a
-  // slow upload/poll, which is far less bad than blowing the demo slot.
+  // Blocking HTTPS calls to ThingSpeak (TLS handshake included) can take
+  // several real seconds. Two failed approaches were tried here:
+  //  - hiding ALL of it from the demo clock made a lap take ~3x longer
+  //    in real time than DEMO_CYCLE_MINUTES;
+  //  - hiding NONE of it caused single-tick jumps of over an hour of
+  //    sim-time, occasionally large enough to leap clean over the
+  //    1-hour-wide RISING/WINDDOWN windows and skip them entirely.
+  // Splitting the difference: hide only up to MAX_HIDDEN_NETWORK_MS, so
+  // a jump can never exceed about the size of a normal tick (~12
+  // sim-minutes at the default speed - far too small to skip an
+  // hour-wide state), while the remainder still counts, keeping total
+  // lap duration close to DEMO_CYCLE_MINUTES instead of ballooning.
+  const unsigned long MAX_HIDDEN_NETWORK_MS = 2000;
+  unsigned long uploadStart = millis();
   Command cmd = netTick(tele);
+  unsigned long uploadDuration = millis() - uploadStart;
+  demoClockBaseMillis += min(uploadDuration, MAX_HIDDEN_NETWORK_MS);
 
   //TODO(firmware team): apply `cmd` (mode / setpoints / blinds / lights
   //overrides) to the control logic above once task #1 lands. For now the
