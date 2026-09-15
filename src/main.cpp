@@ -559,22 +559,28 @@ void loop() {
   tele.motion       = (PIRval == HIGH);
 
   // Blocking HTTPS calls to ThingSpeak (TLS handshake included) can take
-  // several real seconds. Two failed approaches were tried here:
+  // several real seconds. Three approaches so far:
   //  - hiding ALL of it from the demo clock made a lap take ~3x longer
   //    in real time than DEMO_CYCLE_MINUTES;
   //  - hiding NONE of it caused single-tick jumps of over an hour of
-  //    sim-time, occasionally large enough to leap clean over the
-  //    1-hour-wide RISING/WINDDOWN windows and skip them entirely.
-  // Splitting the difference: hide only up to MAX_HIDDEN_NETWORK_MS, so
-  // a jump can never exceed about the size of a normal tick (~12
-  // sim-minutes at the default speed - far too small to skip an
-  // hour-wide state), while the remainder still counts, keeping total
-  // lap duration close to DEMO_CYCLE_MINUTES instead of ballooning.
-  const unsigned long MAX_HIDDEN_NETWORK_MS = 2000;
+  //    sim-time - large enough to leap clean over the 1-hour-wide
+  //    RISING/WINDDOWN windows and skip them entirely;
+  //  - hiding only a small FIXED amount (e.g. 2000ms) barely helped: a
+  //    ~10s stall still left ~8s uncompensated, which is what actually
+  //    becomes the jump - the cap needs to bound the leftover, not the
+  //    hidden part.
+  // So: hide everything past MAX_UNCOMPENSATED_MS, letting only that
+  // small remainder count. A jump is now bounded to ~MAX_UNCOMPENSATED_MS
+  // worth of sim-time (a few sim-minutes) - far too small to skip an
+  // hour-wide state - while total lap duration only grows by
+  // MAX_UNCOMPENSATED_MS per network call instead of ballooning.
+  const unsigned long MAX_UNCOMPENSATED_MS = 500;
   unsigned long uploadStart = millis();
   Command cmd = netTick(tele);
   unsigned long uploadDuration = millis() - uploadStart;
-  demoClockBaseMillis += min(uploadDuration, MAX_HIDDEN_NETWORK_MS);
+  if (uploadDuration > MAX_UNCOMPENSATED_MS) {
+    demoClockBaseMillis += uploadDuration - MAX_UNCOMPENSATED_MS;
+  }
 
   //TODO(firmware team): apply `cmd` (mode / setpoints / blinds / lights
   //overrides) to the control logic above once task #1 lands. For now the
