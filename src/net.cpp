@@ -127,7 +127,13 @@ void pollCommands() {
 
 void netBegin() {
   WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  // main.cpp's own ConnectToWiFi() (for MQTT) usually already connects
+  // before this runs. Re-calling WiFi.begin() on an already-connected
+  // station forces a disconnect/reconnect, which drops the MQTT socket
+  // right as it's set up - only (re)connect here if actually needed.
+  if (WiFi.status() != WL_CONNECTED) {
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  }
   lastWifiTry = millis();
 
   // TODO(security): pin the ThingSpeak root CA instead of setInsecure()

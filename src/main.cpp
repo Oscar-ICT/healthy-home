@@ -79,17 +79,27 @@ const char* timeStateName(TimeState s) {
   return "?";
 }
 
+//Computes an 8-bit brightness that ramps across one hour: 0 at the top
+//of the hour up to 255 by the end for a rising fade, or the reverse for
+//a winddown fade. Driven by the clock's own minute/second instead of
+//counting +-1 per loop() call, so it completes correctly whether the
+//hour is 3600 real seconds (normal RTC) or ~10 real seconds
+//(DEMO_MODE) - a fixed per-loop step could only ever manage the
+//former.
+int fadeLevel(const DateTime& now, bool rampUp) {
+  float fraction = (now.minute() * 60 + now.second()) / 3600.0f;
+  if (fraction > 1.0f) fraction = 1.0f;
+  int level = (int)(fraction * 255.0f);
+  return rampUp ? level : (255 - level);
+}
+
 //Alarm
 int BUZZERPIN = 25;
+bool alarmFiredThisCycle = false; //ensures the wake alarm fires once per lap, not once per loop()
 
 //Overhead light PWM pin and settings
 int PWMPIN = 27;
 int pwmval = 0;
-bool fadeUp = false;
-bool fadeDown = false;
-bool faded = false;
-const int fadeSpeed = 10;
-unsigned long previousPWMTime = 0;
 
 // ---- Sped-up demo clock ------------------------------------------------
 // Compresses a full 24h day into DEMO_CYCLE_MINUTES of real time so every
@@ -435,28 +445,19 @@ void loop() {
   //Time Based Rules Using RTC
   // Lighting and Blinds control based on time of day
 
-  //Rising time state triggers fade up of lights
-  //State control
-  if (timeState == rising && faded == false) {
-    fadeUp = true;
-    fadeDown = false;
-  }
-  //Lights fade on logic
-  if (fadeUp && millis() - previousPWMTime >= fadeSpeed) {
-    previousPWMTime = millis();
+  //Rising: fade the light up across the hour, driven by the clock
+  //itself rather than a per-loop increment (see fadeLevel() above).
+  if (timeState == rising) {
+    alarmFiredThisCycle = false; //arm the wake alarm for this lap
+    pwmval = fadeLevel(now, true);
     analogWrite(PWMPIN, pwmval);
-    myServo.write(floor(pwmval/1.41));
-    Serial.println(pwmval);
-    Serial.println(floor(pwmval/1.41));
-    pwmval++;
-    if (pwmval == 254) {
-      tone(BUZZERPIN, 500, 500);
-    }
-    if (pwmval >= 255) {
-      pwmval = 255;
-      fadeUp = false;
-      faded = true;
-    }
+    myServo.write(floor(pwmval / 1.41));
+  }
+
+  //Wake: alarm fires once, right as the state is entered.
+  if (timeState == wake && !alarmFiredThisCycle) {
+    tone(BUZZERPIN, 500, 500);
+    alarmFiredThisCycle = true;
   }
 
   //LDR Logic for wake/day time states
@@ -480,23 +481,12 @@ void loop() {
     }
   }
 
-  if (timeState == winddown && !fadeDown && pwmval > 0) {
-    fadeDown = true;
-    fadeUp = false;
-    faded = false;
-  }
-
-  //Lights fade off winddown logic
-  if (fadeDown && millis() - previousPWMTime >= fadeSpeed) {
-    previousPWMTime = millis();
+  //Winddown: fade the light back down across the hour, same
+  //clock-driven approach as the rising fade.
+  if (timeState == winddown) {
+    pwmval = fadeLevel(now, false);
     analogWrite(PWMPIN, pwmval);
-    Serial.println(pwmval);
-    myServo.write(floor(pwmval/1.41));
-    pwmval--;
-    if (pwmval < 0) {
-      pwmval = 0;
-      fadeDown = false;
-    }
+    myServo.write(floor(pwmval / 1.41));
   }
 
   if (timeState == bed) {
@@ -568,18 +558,16 @@ void loop() {
   tele.timeState    = tsTimeState(timeState);
   tele.motion       = (PIRval == HIGH);
 
-  // Remember start time
-  unsigned long uploadStart = millis();
-
+  // NOTE: this used to shift demoClockBaseMillis forward by however long
+  // netTick() blocked, so the demo clock wouldn't "lose" that time. But
+  // ThingSpeak's TLS handshake can take several real seconds, and
+  // excluding all of it made one 24h lap take ~3x longer in real time
+  // than DEMO_CYCLE_MINUTES - defeating the point of fitting a demo
+  // slot. Letting it count as normal elapsed time keeps the total real
+  // duration of a lap pinned close to DEMO_CYCLE_MINUTES; the trade-off
+  // is an occasional visible jump in the displayed clock right after a
+  // slow upload/poll, which is far less bad than blowing the demo slot.
   Command cmd = netTick(tele);
-
-  // Blocking HTTPS calls can take a couple of seconds; without this the
-  // demo clock would silently "lose" that time on every upload/poll and
-  // drift out of sync with the elapsed real time. Shifting the base
-  // forward excludes it, so the demo clock only counts time spent
-  // actually running the local simulation.
-  unsigned long uploadDuration = millis() - uploadStart;
-  demoClockBaseMillis += uploadDuration;
 
   //TODO(firmware team): apply `cmd` (mode / setpoints / blinds / lights
   //overrides) to the control logic above once task #1 lands. For now the
