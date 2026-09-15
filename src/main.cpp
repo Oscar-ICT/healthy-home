@@ -7,6 +7,9 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <DHTesp.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
 // Node Red Connection
 const char *WIFI_SSID = "Wokwi-GUEST";
@@ -65,22 +68,84 @@ int PIRval = 0;
 enum TimeState {rising, wake, winddown, bed, day};
 TimeState timeState = day;
 
+const char* timeStateName(TimeState s) {
+  switch (s) {
+    case rising:   return "RISING";
+    case wake:     return "WAKE";
+    case winddown: return "WINDDOWN";
+    case bed:      return "BED";
+    case day:      return "DAY";
+  }
+  return "?";
+}
+
+//Computes an 8-bit brightness that ramps across one hour: 0 at the top
+//of the hour up to 255 by the end for a rising fade, or the reverse for
+//a winddown fade. Driven by the clock's own minute/second instead of
+//counting +-1 per loop() call, so it completes correctly whether the
+//hour is 3600 real seconds (normal RTC) or ~10 real seconds
+//(DEMO_MODE) - a fixed per-loop step could only ever manage the
+//former.
+int fadeLevel(const DateTime& now, bool rampUp) {
+  float fraction = (now.minute() * 60 + now.second()) / 3600.0f;
+  if (fraction > 1.0f) fraction = 1.0f;
+  int level = (int)(fraction * 255.0f);
+  return rampUp ? level : (255 - level);
+}
+
 //Alarm
 int BUZZERPIN = 25;
+bool alarmFiredThisCycle = false; //ensures the wake alarm fires once per lap, not once per loop()
 
 //Overhead light PWM pin and settings
 int PWMPIN = 27;
 int pwmval = 0;
-bool fadeUp = false;
-bool fadeDown = false;
-bool faded = false;
-const int fadeSpeed = 10;
-unsigned long previousPWMTime = 0;
 
-// Simulation of system
-DateTime simulatedTime(2026, 8, 26, 0, 0, 0);
-unsigned long simulatedMillis = 0;
-const unsigned long SIMULATION_SPEED = 1;
+// ---- Sped-up demo clock ------------------------------------------------
+// Compresses a full 24h day into DEMO_CYCLE_MINUTES of real time so every
+// time-based behaviour (rising/wake/day/winddown/bed - fades, buzzer,
+// servo, PIR night lighting) plays out inside a short demo/interview
+// slot instead of waiting for a real day to pass. Loops back to 00:00
+// automatically. Set DEMO_MODE to 0 to run on the real DS3231 RTC.
+#define DEMO_MODE 1
+const float DEMO_CYCLE_MINUTES = 4.0f;
+const float DEMO_SPEED = (24.0f * 60.0f * 60.0f) / (DEMO_CYCLE_MINUTES * 60.0f); // simulated seconds per real second
+const DateTime DEMO_START(2026, 8, 26, 0, 0, 0);
+unsigned long demoClockBaseMillis = 0; // shifted forward to "pause" the demo clock during blocking network calls
+
+//OLED display: shows the (demo) clock + current time-of-day phase so the
+//cycle can be followed at a glance during a demo instead of the serial
+//monitor. Shares the I2C bus with the RTC (SDA=21, SCL=22).
+#define OLED_WIDTH 128
+#define OLED_HEIGHT 64
+Adafruit_SSD1306 display(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
+bool oledReady = false;
+
+void updateDisplay(const DateTime& now, TimeState ts) {
+  if (!oledReady) return;
+
+  char clockText[9];
+  snprintf(clockText, sizeof(clockText), "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
+
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+
+  display.setTextSize(2);
+  display.setCursor(0, 0);
+  display.println(clockText);
+
+  display.setTextSize(2);
+  display.setCursor(0, 28);
+  display.println(timeStateName(ts));
+
+#if DEMO_MODE
+  display.setTextSize(1);
+  display.setCursor(0, 54);
+  display.println("DEMO MODE");
+#endif
+
+  display.display();
+}
 
 //MQTT Communication
 String CreateMqttClientId()
@@ -173,17 +238,10 @@ void ConnectToMqtt()
 }
 
 //MQTT Publish function
-void PublishDhtReadings()
+//Takes the readings already taken this loop() iteration instead of
+//re-reading the DHT22 (loop() already validated they're not NaN).
+void PublishDhtReadings(float temperature, float humidity)
 {
-  float temperature = dht.readTemperature();
-  float humidity = dht.readHumidity();
-
-  if (isnan(temperature) || isnan(humidity))
-  {
-    Serial.println("Failed to read from DHT22 sensor.");
-    return;
-  }
-
   char temperatureText[10];
   char humidityText[10];
 
@@ -211,7 +269,15 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
 
-  dht.begin();
+  //OLED display (shares the I2C bus with the RTC - SDA=21, SCL=22)
+  Wire.begin();
+  oledReady = display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  if (!oledReady) {
+    Serial.println("SSD1306 init failed - continuing without display");
+  } else {
+    display.clearDisplay();
+    display.display();
+  }
 
   //Air Conditioner Pins
   pinMode(HOTLEDPIN, OUTPUT);
@@ -229,6 +295,16 @@ void setup() {
   SetupMqtt();
   ConnectToMqtt();
 
+#if DEMO_MODE
+  // Demo mode drives the clock from millis(), not the DS3231 - no RTC
+  // hardware dependency, so a missing/faulty RTC can't hang the demo.
+  demoClockBaseMillis = millis();
+  Serial.print("DEMO MODE: 24h compressed into ");
+  Serial.print(DEMO_CYCLE_MINUTES);
+  Serial.print(" min (");
+  Serial.print(DEMO_SPEED, 0);
+  Serial.println("x speed), loops back to 00:00 automatically");
+#else
   //RTC connection check
   if(!rtc.begin()){
     while(1);
@@ -244,9 +320,7 @@ void setup() {
   //rtc.adjust(DateTime(2026,8,26,9,0,0)); //Un comment for 9am (day)
   //rtc.adjust(DateTime(2026,8,26,20,0,0)); //Un comment for 8:01pm (winddown)
   Serial.println("RTC initialised");
-
-  // Simulated time cycle
-  simulatedMillis = millis();
+#endif
 
   //PIR
   pinMode(PIRLEDPIN, OUTPUT);
@@ -292,17 +366,16 @@ void loop() {
   //Air con values
   float hysteresis = 1.0;
 
-  //RTC
+  //RTC (or the sped-up demo clock - see DEMO_MODE above)
+#if DEMO_MODE
+  unsigned long elapsedRealMs = millis() - demoClockBaseMillis;
+  uint32_t simSeconds = (uint32_t)((elapsedRealMs / 1000.0f) * DEMO_SPEED);
+  simSeconds %= 86400UL; // wraps back to 00:00 after one simulated day
+  DateTime now = DEMO_START + TimeSpan((int32_t)simSeconds);
+#else
   DateTime now = rtc.now();
+#endif
 
-  //RTC simulation
-  /*
-  unsigned long elapsedSeconds = (millis() - simulatedMillis) / 1000;
-
-  unsigned long simulatedMinutes = elapsedSeconds * SIMULATION_SPEED;
-
-  DateTime now = simulatedTime + TimeSpan(0, 0, simulatedMinutes, 0);
-  */
   //LDR
   int ldrval = analogRead(LDRPIN);
   
@@ -337,17 +410,13 @@ void loop() {
     timeState = day;
   }
 
+  updateDisplay(now, timeState);
+
   // Sensor error checks (may need to include all sensors in the future)
 
   //DHT22 sensor error check
   if (isnan(humidity) || isnan(temperature)){ //Prevents read failure
     Serial.println("Failed to read from DHT22 sensor");
-    return;
-  }
-
-  // LDR sensor error check
-  if (isnan(ldrval)){ //Prevents read failure
-    Serial.println("Failed to read from LDR sensor");
     return;
   }
 
@@ -376,28 +445,19 @@ void loop() {
   //Time Based Rules Using RTC
   // Lighting and Blinds control based on time of day
 
-  //Rising time state triggers fade up of lights
-  //State control
-  if (timeState == rising && faded == false) {
-    fadeUp = true;
-    fadeDown = false;
-  }
-  //Lights fade on logic
-  if (fadeUp && millis() - previousPWMTime >= fadeSpeed) {
-    previousPWMTime = millis();
+  //Rising: fade the light up across the hour, driven by the clock
+  //itself rather than a per-loop increment (see fadeLevel() above).
+  if (timeState == rising) {
+    alarmFiredThisCycle = false; //arm the wake alarm for this lap
+    pwmval = fadeLevel(now, true);
     analogWrite(PWMPIN, pwmval);
-    myServo.write(floor(pwmval/1.41));
-    Serial.println(pwmval);
-    Serial.println(floor(pwmval/1.41));
-    pwmval++;
-    if (pwmval == 254) {
-      tone(BUZZERPIN, 500, 500);
-    }
-    if (pwmval >= 255) {
-      pwmval = 255;
-      fadeUp = false;
-      faded = true;
-    }
+    myServo.write(floor(pwmval / 1.41));
+  }
+
+  //Wake: alarm fires once, right as the state is entered.
+  if (timeState == wake && !alarmFiredThisCycle) {
+    tone(BUZZERPIN, 500, 500);
+    alarmFiredThisCycle = true;
   }
 
   //LDR Logic for wake/day time states
@@ -421,23 +481,12 @@ void loop() {
     }
   }
 
-  if (timeState == winddown && !fadeDown && pwmval > 0) {
-    fadeDown = true;
-    fadeUp = false;
-    faded = false;
-  }
-
-  //Lights fade off winddown logic
-  if (fadeDown && millis() - previousPWMTime >= fadeSpeed) {
-    previousPWMTime = millis();
+  //Winddown: fade the light back down across the hour, same
+  //clock-driven approach as the rising fade.
+  if (timeState == winddown) {
+    pwmval = fadeLevel(now, false);
     analogWrite(PWMPIN, pwmval);
-    Serial.println(pwmval);
-    myServo.write(floor(pwmval/1.41));
-    pwmval--;
-    if (pwmval < 0) {
-      pwmval = 0;
-      fadeDown = false;
-    }
+    myServo.write(floor(pwmval / 1.41));
   }
 
   if (timeState == bed) {
@@ -495,13 +544,12 @@ void loop() {
   if (nowMQTT - lastDhtPublishTime >= DHT_PUBLISH_INTERVAL_MS)
   {
     lastDhtPublishTime = nowMQTT;
-    PublishDhtReadings();
+    PublishDhtReadings(temperature, humidity);
   }
 
   //Network layer: push telemetry, pull remote commands (both rate-limited
-  //inside netTick). NOTE: LDRPIN (GPIO4) is on ADC2, which the ESP32
-  //cannot sample while WiFi is active - ldrval will read 0 here until the
-  //LDR is moved to an ADC1 pin (32-39). Tracked as firmware task #1.
+  //inside netTick). LDRPIN is now GPIO32 (ADC1), which is unaffected by
+  //WiFi, so ldrval reads correctly here.
   Telemetry tele;
   tele.temperature  = temperature;
   tele.humidity     = humidity;
@@ -510,14 +558,29 @@ void loop() {
   tele.timeState    = tsTimeState(timeState);
   tele.motion       = (PIRval == HIGH);
 
-  // Remember start time
+  // Blocking HTTPS calls to ThingSpeak (TLS handshake included) can take
+  // several real seconds. Three approaches so far:
+  //  - hiding ALL of it from the demo clock made a lap take ~3x longer
+  //    in real time than DEMO_CYCLE_MINUTES;
+  //  - hiding NONE of it caused single-tick jumps of over an hour of
+  //    sim-time - large enough to leap clean over the 1-hour-wide
+  //    RISING/WINDDOWN windows and skip them entirely;
+  //  - hiding only a small FIXED amount (e.g. 2000ms) barely helped: a
+  //    ~10s stall still left ~8s uncompensated, which is what actually
+  //    becomes the jump - the cap needs to bound the leftover, not the
+  //    hidden part.
+  // So: hide everything past MAX_UNCOMPENSATED_MS, letting only that
+  // small remainder count. A jump is now bounded to ~MAX_UNCOMPENSATED_MS
+  // worth of sim-time (a few sim-minutes) - far too small to skip an
+  // hour-wide state - while total lap duration only grows by
+  // MAX_UNCOMPENSATED_MS per network call instead of ballooning.
+  const unsigned long MAX_UNCOMPENSATED_MS = 500;
   unsigned long uploadStart = millis();
-
   Command cmd = netTick(tele);
-
-  // Network time removed from simulation
   unsigned long uploadDuration = millis() - uploadStart;
-  simulatedMillis += uploadDuration;
+  if (uploadDuration > MAX_UNCOMPENSATED_MS) {
+    demoClockBaseMillis += uploadDuration - MAX_UNCOMPENSATED_MS;
+  }
 
   //TODO(firmware team): apply `cmd` (mode / setpoints / blinds / lights
   //overrides) to the control logic above once task #1 lands. For now the
