@@ -119,9 +119,9 @@
     {
       "type": "wokwi-text",
       "id": "text2",
-      "top": -364.8,
-      "left": 403.2,
-      "attrs": { "text": "Night Light Trigger" }
+      "top": -374.4,
+      "left": 364.8,
+      "attrs": { "text": "Night Light Trigger - PIR Motion" }
     },
     {
       "type": "wokwi-text",
