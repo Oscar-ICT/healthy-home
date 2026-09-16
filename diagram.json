@@ -52,7 +52,7 @@
       "type": "wokwi-buzzer",
       "id": "bz1",
       "top": -266.4,
-      "left": 333,
+      "left": 328.2,
       "attrs": { "volume": "0.1" }
     },
     {
@@ -108,6 +108,78 @@
       "top": 131,
       "left": 192,
       "attrs": { "color": "green", "xray": "1" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text1",
+      "top": -288,
+      "left": 220.8,
+      "attrs": { "text": "Buzzer - (Morning Alarm)" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text2",
+      "top": -364.8,
+      "left": 403.2,
+      "attrs": { "text": "Night Light Trigger" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text3",
+      "top": -201.6,
+      "left": 748.8,
+      "attrs": { "text": "Curtain motor" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text4",
+      "top": 182.4,
+      "left": 153.6,
+      "attrs": { "text": "Decision Tree" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text5",
+      "top": 201.6,
+      "left": 134.4,
+      "attrs": { "text": "Classifier Controller" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text6",
+      "top": 268.8,
+      "left": -268.8,
+      "attrs": { "text": "Simulation Screen" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text7",
+      "top": 249.6,
+      "left": 499.2,
+      "attrs": { "text": "Real time clock" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text8",
+      "top": 345.6,
+      "left": 28.8,
+      "attrs": { "text": "LDR - Light level detection" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text9",
+      "top": -268.8,
+      "left": -172.8,
+      "attrs": { "text": "Temperature & Humidity readings" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text10",
+      "top": 19.2,
+      "left": 758.4,
+      "attrs": {
+        "text": "Wire Colour Legend:\nBlack is ground\nYellow is 5V or 3V power to the breadboard\nOrange is power to the ESP32\nRed is Control & Actuation (Outputs)\nGreen is for Data & Signals (Inputs)"
+      }
     }
   ],
   "connections": [
