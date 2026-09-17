@@ -25,6 +25,20 @@ const char *MQTT_COMMAND_TOPIC = "week6/HealthyHome/status/esp32";
 const char *MQTT_STATUS_TOPIC = "week6/HealthyHome/status/esp32";
 const char *MQTT_TEMPERATURE_TOPIC = "week6/HealthyHome/sensor/temperature";
 const char *MQTT_HUMIDITY_TOPIC = "week6/HealthyHome/sensor/humidity";
+const char *MQTT_SERVO_SET_TOPIC = "week6/HealthyHome/actuator/servo/set";
+const char *MQTT_SERVO_STATE_TOPIC = "week6/HealthyHome/actuator/servo/state";
+const char *MQTT_PIR_TOPIC = "week6/HealthyHome/sensor/pir";
+const char *MQTT_LDR_TOPIC = "week6/HealthyHome/sensor/ldr";
+const char *MQTT_PIR_LED_TOPIC = "week6/HealthyHome/actuator/pir_led/set";
+const char *MQTT_HEAT_LED_TOPIC = "week6/HealthyHome/actuator/heat_led/set";
+const char *MQTT_COOL_LED_TOPIC = "week6/HealthyHome/actuator/cool_led/set";
+const char *MQTT_BRIGHT_LED_TOPIC = "week6/HealthyHome/actuator/bright_led/set";
+const char *MQTT_BUZZER_TOPIC = "week6/HealthyHome/actuator/buzzer/set";
+const char *MQTT_PIRLED_STATE_TOPIC = "week6/HealthyHome/actuator/pir_led/state";
+const char *MQTT_HEATLED_STATE_TOPIC = "week6/HealthyHome/actuator/heat_led/state";
+const char *MQTT_COOLLED_STATE_TOPIC = "week6/HealthyHome/actuator/cool_led/state";
+const char *MQTT_BRIGHTLED_STATE_TOPIC = "week6/HealthyHome/actuator/bright_led/state";
+const char *MQTT_BUZZER_STATE_TOPIC = "week6/HealthyHome/actuator/buzzer/state";
 
 const unsigned long DHT_PUBLISH_INTERVAL_MS = 5000;
 const unsigned long MQTT_RETRY_INTERVAL_MS = 5000;
@@ -32,12 +46,15 @@ const unsigned long MQTT_RETRY_INTERVAL_MS = 5000;
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
 
-unsigned long lastDhtPublishTime = 0;
+unsigned long lastSensorPublishTime = 0;
 
 
 // Servo set up
 Servo myServo;
 #define SERVOPIN 23
+int currentServoAngle = 0;
+bool servoStateNeedsPublish = true;
+bool buzzerState = false;
 
 //DHT22 Sensor SetUp
 #define DHTPIN 15
@@ -163,23 +180,198 @@ String CreateMqttClientId()
   return String(clientId);
 }
 
+void SetServoAngle(int angle)
+{
+  currentServoAngle = constrain(angle, 0, 180);
+  myServo.write(currentServoAngle);
+  servoStateNeedsPublish = true;
+}
+
+
+void SetActuatorStates()
+{
+  mqttClient.publish(
+    MQTT_PIRLED_STATE_TOPIC,
+    digitalRead(PIRLEDPIN) == HIGH ? "1" : "0",
+    true
+  );
+
+  mqttClient.publish(
+    MQTT_HEATLED_STATE_TOPIC,
+    digitalRead(HOTLEDPIN) == HIGH ? "1" : "0",
+    true
+  );
+
+  mqttClient.publish(
+    MQTT_COOLLED_STATE_TOPIC,
+    digitalRead(COLDLEDPIN) == HIGH ? "1" : "0",
+    true
+  );
+
+  mqttClient.publish(
+    MQTT_BRIGHTLED_STATE_TOPIC,
+    pwmval > 0 ? "1" : "0",
+    true
+  );
+
+  // Buzzer state
+  mqttClient.publish(
+  MQTT_BUZZER_STATE_TOPIC,
+  buzzerState ? "1" : "0",
+  true
+  );
+}
+
 void CallbackMqtt(char *topic, byte *payload, unsigned int length)
 {
+  char message[16];
+
+  const unsigned int copyLength =
+      min(length, sizeof(message) - 1);
+
+  for (unsigned int i = 0; i < copyLength; i++)
+  {
+    message[i] = static_cast<char>(payload[i]);
+  }
+
+  message[copyLength] = '\0';
+
   Serial.print("Message received on ");
   Serial.print(topic);
   Serial.print(": ");
+  Serial.println(message);
 
-  for (unsigned int i = 0; i < length; i++)
+  // SERVO
+
+  if (strcmp(topic, MQTT_SERVO_SET_TOPIC) == 0)
   {
-    Serial.print(static_cast<char>(payload[i]));
+    char *endPointer = nullptr;
+
+    const long requestedAngle =
+        strtol(message, &endPointer, 10);
+
+    if (endPointer == message || *endPointer != '\0')
+    {
+      Serial.println("Invalid servo angle.");
+      return;
+    }
+
+    SetServoAngle(static_cast<int>(requestedAngle));
+
+    return;
   }
 
-  Serial.println();
+  // PIR LED
+
+  if (strcmp(topic, MQTT_PIR_LED_TOPIC) == 0)
+  {
+    if (strcmp(message, "1") == 0)
+    {
+      digitalWrite(PIRLEDPIN, HIGH);
+      Serial.println("PIR LED ON");
+    }
+    else if (strcmp(message, "0") == 0)
+    {
+      digitalWrite(PIRLEDPIN, LOW);
+      Serial.println("PIR LED OFF");
+    }
+
+    SetActuatorStates();
+
+    return;
+  }
+
+  // HEAT LED
+
+  if (strcmp(topic, MQTT_HEAT_LED_TOPIC) == 0)
+  {
+    if (strcmp(message, "1") == 0)
+    {
+      digitalWrite(HOTLEDPIN, HIGH);
+      Serial.println("Heat LED ON");
+    }
+    else if (strcmp(message, "0") == 0)
+    {
+      digitalWrite(HOTLEDPIN, LOW);
+      Serial.println("Heat LED OFF");
+    }
+
+    SetActuatorStates();
+
+    return;
+  }
+
+  // COOL LED
+
+  if (strcmp(topic, MQTT_COOL_LED_TOPIC) == 0)
+  {
+    if (strcmp(message, "1") == 0)
+    {
+      digitalWrite(COLDLEDPIN, HIGH);
+      Serial.println("Cool LED ON");
+    }
+    else if (strcmp(message, "0") == 0)
+    {
+      digitalWrite(COLDLEDPIN, LOW);
+      Serial.println("Cool LED OFF");
+    }
+
+    SetActuatorStates();
+
+    return;
+  }
+
+  // BRIGHT LED
+
+  if (strcmp(topic, MQTT_BRIGHT_LED_TOPIC) == 0)
+  {
+    if (strcmp(message, "1") == 0)
+    {
+      analogWrite(PWMPIN, 255);
+      Serial.println("Bright LED ON");
+    }
+    else if (strcmp(message, "0") == 0)
+    {
+      analogWrite(PWMPIN, 0);
+      Serial.println("Bright LED OFF");
+    }
+    
+    SetActuatorStates();
+
+    return;
+  }
+
+  // BUZZER
+
+  if (strcmp(topic, MQTT_BUZZER_TOPIC) == 0)
+  {
+    if (strcmp(message, "1") == 0)
+    {
+      tone(BUZZERPIN, 500);
+      Serial.println("Buzzer ON");
+    }
+    else if (strcmp(message, "0") == 0)
+    {
+      noTone(BUZZERPIN);
+      Serial.println("Buzzer OFF");
+    }
+
+    SetActuatorStates();
+
+    return;
+  }
 }
 
 void SetupDht()
 {
 dht.begin();
+}
+
+void SetupServo()
+{
+  myServo.setPeriodHertz(50);
+  myServo.attach(SERVOPIN, 500, 2400);
+  SetServoAngle(currentServoAngle);
 }
 
 void SetupMqtt()
@@ -221,6 +413,74 @@ void ConnectToMqtt()
     {
       Serial.println("connected.");
 
+      mqttClient.publish(MQTT_STATUS_TOPIC, "online", true);
+      Serial.print("Subscribed status to:");
+      Serial.println(MQTT_STATUS_TOPIC);
+
+      if (mqttClient.subscribe(MQTT_SERVO_SET_TOPIC))
+      {
+        Serial.print("Subscribed to: ");
+        Serial.println(MQTT_SERVO_SET_TOPIC);
+      }
+      else
+      {
+        Serial.println("MQTT servo subscription failed.");
+      }
+
+      // Subscribe to Node-RED actuator commands
+
+      if (mqttClient.subscribe(MQTT_PIR_LED_TOPIC))
+      {
+        Serial.print("Subscribed to: ");
+        Serial.println(MQTT_PIR_LED_TOPIC);
+      }
+      else
+      {
+        Serial.println("MQTT PIR LED subscription failed.");
+      }
+
+      if (mqttClient.subscribe(MQTT_HEAT_LED_TOPIC))
+      {
+        Serial.print("Subscribed to: ");
+        Serial.println(MQTT_HEAT_LED_TOPIC);
+      }
+      else
+      {
+        Serial.println("MQTT heat LED subscription failed.");
+      }
+
+      if (mqttClient.subscribe(MQTT_COOL_LED_TOPIC))
+      {
+        Serial.print("Subscribed to: ");
+        Serial.println(MQTT_COOL_LED_TOPIC);
+      }
+      else
+      {
+        Serial.println("MQTT cool LED subscription failed.");
+      }
+
+      if (mqttClient.subscribe(MQTT_BRIGHT_LED_TOPIC))
+      {
+        Serial.print("Subscribed to: ");
+        Serial.println(MQTT_BRIGHT_LED_TOPIC);
+      }
+      else
+      {
+        Serial.println("MQTT bright LED subscription failed.");
+      }
+
+      if (mqttClient.subscribe(MQTT_BUZZER_TOPIC))
+      {
+        Serial.print("Subscribed to: ");
+        Serial.println(MQTT_BUZZER_TOPIC);
+      }
+      else
+      {
+        Serial.println("MQTT buzzer subscription failed.");
+      }
+
+      servoStateNeedsPublish = true; 
+
       if (mqttClient.subscribe(MQTT_COMMAND_TOPIC))
       {
         Serial.print("Subscribed to: ");
@@ -239,6 +499,7 @@ void ConnectToMqtt()
       delay(5000);
     }
   }
+  SetActuatorStates();
 }
 
 //MQTT Publish function
@@ -269,6 +530,59 @@ void PublishDhtReadings(float temperature, float humidity)
   Serial.println((temperaturePublished && humidityPublished) ? "success" : "failed");
 }
 
+void PublishPirReading(int pirValue)
+{
+  const char *motionText = (pirValue == HIGH) ? "Motion Detected" : "No Motion";
+
+  const char *motionValue = (pirValue == HIGH) ? "1" : "0";
+
+
+  if (mqttClient.publish(MQTT_PIR_TOPIC, motionValue))
+  {
+    Serial.print("PIR: ");
+    Serial.println(motionValue);
+  }
+  else
+  {
+    Serial.println("PIR MQTT publish failed.");
+  }
+}
+
+void PublishLdrReading(int ldrValue)
+{
+  char ldrText[8];
+  snprintf(ldrText, sizeof(ldrText), "%d", ldrValue);
+
+  if (mqttClient.publish(MQTT_LDR_TOPIC, ldrText))
+  {
+    Serial.print("LDR: ");
+    Serial.println(ldrText);
+  }
+  else
+  {
+    Serial.println("LDR MQTT publish failed.");
+  }
+}
+
+void PublishServoState()
+{
+  if (!servoStateNeedsPublish)
+  {
+    return;
+  }
+
+  char servoAngleText[8];
+  snprintf(servoAngleText, sizeof(servoAngleText), "%d", currentServoAngle);
+
+  if (mqttClient.publish(MQTT_SERVO_STATE_TOPIC, servoAngleText, true))
+  {
+    servoStateNeedsPublish = false;
+
+    Serial.print("Published servo state to MQTT: ");
+    Serial.println(servoAngleText);
+  }
+}
+
 // ---- Occupancy edge-AI: calibration + live prediction -------------------
 // GPIO4 -> button -> GND (uses the internal pull-up, so idle = HIGH,
 // pressed = LOW). Short press toggles which label new samples get;
@@ -295,6 +609,7 @@ bool everSeenMotion = false;
 
 // Short press: toggle which label new samples get. Long press: stop
 // collecting and train the tree from everything gathered so far.
+/*
 void handleCalibrationButton() {
   bool down = (digitalRead(CALIB_BUTTON_PIN) == LOW);
 
@@ -344,7 +659,7 @@ void updateOccupancy(float temperature, float humidity, float lightPct, bool pir
     // TODO: feed `occupied` into the automation rules below (e.g. only
     // let PIR-driven behaviour during bed/winddown act if occupied).
   }
-}
+}*/
 
 void setup() {
   Serial.begin(115200);
@@ -376,6 +691,7 @@ void setup() {
 
   //MQTT setup
   SetupDht();
+  SetupServo();
   ConnectToWiFi();
   SetupMqtt();
   ConnectToMqtt();
@@ -625,11 +941,16 @@ void loop() {
   // Must run frequently to maintain the MQTT connection and receive messages.
   mqttClient.loop();
 
+  PublishServoState();
+  SetActuatorStates();
+
   const unsigned long nowMQTT = millis();
-  if (nowMQTT - lastDhtPublishTime >= DHT_PUBLISH_INTERVAL_MS)
+  if (nowMQTT - lastSensorPublishTime >= DHT_PUBLISH_INTERVAL_MS)
   {
-    lastDhtPublishTime = nowMQTT;
+    lastSensorPublishTime = nowMQTT;
     PublishDhtReadings(temperature, humidity);
+    PublishPirReading(PIRval);
+    PublishLdrReading(ldrval);
   }
 
   //Network layer: hand off the latest sample and read back the latest
@@ -654,6 +975,8 @@ void loop() {
   (void)cmd;
 
   //Edge AI: occupancy calibration/prediction (button on CALIB_BUTTON_PIN)
+  /*
   handleCalibrationButton();
   updateOccupancy(temperature, humidity, tele.light, PIRval == HIGH);
+  */
 }
