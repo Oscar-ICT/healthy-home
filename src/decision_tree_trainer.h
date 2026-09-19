@@ -79,6 +79,7 @@ private:
     // GIVEN A PARENT SET OF INDICES AND A PROPOSED SPLIT (FEATURE + THRESHOLD), 
     // COMPUTE PARENT ENTROPY MINUS WEIGHTED CHILD ENTROPY. MUST RETURN float
     // basically run calculate entropy and then subtract the weighted sum of the two children to the parents entropy to figure the gain
+        uint8_t parentLabels[MaxNodes];
         for (size_t i = 0; i < sampleIndexCount; i++) {
             parentLabels[i] = allLabels[sampleIndices[i]];
         }
@@ -90,7 +91,38 @@ private:
         size_t rightCount = 0;
         
         // Split into left and right and return the entropy of the two children
+        for (size_t i = 0; i < sampleIndexCount; i++){
+            float currentValue = allFeatures[sampleIndices[i] * NumFeatures + featureIndex];
+            if (currentValue <= threshold){
+                leftIndices[leftCount] = sampleIndices[i];
+                leftCount = leftCount + 1;
+            }
+            else{
+                rightIndices[rightCount] = sampleIndices[i];
+                rightCount = rightCount + 1;
+            }
+        }
 
+        // For the right
+        uint8_t rightLabels[MaxNodes];
+        for (size_t i = 0; i < rightCount; i++) {
+            rightLabels[i] = allLabels[rightIndices[i]];
+        }
+        // aannnd for the left
+        uint8_t leftLabels[MaxNodes];
+        for (size_t i = 0; i < leftCount; i++) {
+            leftLabels[i] = allLabels[leftIndices[i]];
+        }
+
+        // Calculating the childrens information entorpy
+        float right_entropy = calculateEntropy(rightLabels, rightCount);
+        float left_entropy = calculateEntropy(leftLabels, leftCount);
+        
+        // Now we have actually gathered the values here is the information gain calculation
+        float weightedChildEntropy = (static_cast<float>(leftCount) / sampleIndexCount) * left_entropy +
+         (static_cast<float>(rightCount) / sampleIndexCount) * right_entropy;
+        // THis is the actual infomration gain
+        return parent_entropy - weightedChildEntropy;
 
     }
 
@@ -104,6 +136,7 @@ private:
     // GIVEN A SET OF SAMPLE INDICES, TRY EVERY FEATURE AND CANDIDATE THRESHOLD, 
     // RETURN WHICHEVER (feature_index, threshold) GIVES MAX INFORMATION GAIN. MUST RETURN 
     // SOME STRUCT/PAIR OF (feature_index, threshold, gain)
+    
     }
 
     int buildNode(
