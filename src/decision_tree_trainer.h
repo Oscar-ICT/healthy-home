@@ -136,7 +136,24 @@ private:
     // GIVEN A SET OF SAMPLE INDICES, TRY EVERY FEATURE AND CANDIDATE THRESHOLD, 
     // RETURN WHICHEVER (feature_index, threshold) GIVES MAX INFORMATION GAIN. MUST RETURN 
     // SOME STRUCT/PAIR OF (feature_index, threshold, gain)
-    
+        float bestGain = -1.0f;
+        SplitResult best = {0, 0.0f, -1.0f};;
+
+        for (size_t feature_index = 0; feature_index < NumFeatures; feature_index++){
+            for (size_t j = 0; j < sampleIndexCount; j++){
+                // Start info entropying here?
+                float currentThreshold = allFeatures[sampleIndices[j] * NumFeatures + feature_index];
+                float currentGain = calculateInformationGain(allFeatures, allLabels, sampleIndices, sampleIndexCount, feature_index, currentThreshold);
+                if (currentGain > bestGain){
+                    bestGain = currentGain;
+
+                    best.feature_index = feature_index;
+                    best.threshold = currentThreshold;
+                    best.gain = currentGain;
+                }
+            }
+        }
+        return best;
     }
 
     int buildNode(
