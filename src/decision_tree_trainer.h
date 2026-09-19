@@ -5,10 +5,31 @@
 #include "decision_tree.h"
 #pragma once
 
+/*
+short press is for changing states while in training
+long press is just for the finalisation of gathering training data
+*/
 
 // This is a template
 template<size_t MaxNodes, size_t NumFeatures>
 class DecisionTreeTrainer {
+    private:
+    float sampleFeatures[MaxNodes * NumFeatures];
+    uint8_t sampleLabels[MaxNodes];
+    size_t sample_count = 0;
+
+    Node node_storage[MaxNodes];
+    size_t node_count = 0;
+
+    SplitResult findBestSplit(
+        const float* allFeatures,
+        const uint8_t* allLabels,
+        const size_t* sampleIndices,
+        size_t sampleIndexCount,
+        size_t minSamplesToSplit
+    )
+    {
+    }
     bool addSample(float *features, uint8_t label)
     {
     // ADD ONE SAMPLE (features + label) TO THE INTERNAL STORAGE ARRAY, 
