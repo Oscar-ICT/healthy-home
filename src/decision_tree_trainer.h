@@ -170,7 +170,65 @@ private:
     // MAKE A LEAF (via majority label), OR SPLIT USING findBestSplit AND RECURSE 
     // INTO LEFT/RIGHT SUBSETS. MUST RETURN int (the index in the nodes array where 
     // this node was placed)
+    bool isPure = (sampleIndexCount > 0);
+    uint8_t firstLabel = allLabels[sampleIndices[0]];
+    for (size_t i = 1; i < sampleIndexCount; i++){
+        if (allLabels[sampleIndices[i]] != firstLabel){
+            isPure = false;
+        }
     }
+    bool shouldBeLeaf = (currentDepth >= maxDepth) || (sampleIndexCount < minSamplesToSplit) || (isPure);
+    if(shouldBeLeaf){
+        size_t zerosCount = 0;
+        size_t onesCount = 0;
+        for (size_t i = 0; i < sampleIndexCount; i++){
+            if (allLabels[sampleIndices[i]] == 0){
+                zerosCount = zerosCount + 1;
+            }
+            else{
+                onesCount = onesCount + 1;}}
+        
+        uint8_t majorityLabel = (onesCount > zerosCount) ? 1 : 0;
+        node_storage[node_count].depth = currentDepth;
+        node_storage[node_count].predicted_class = majorityLabel;
+        node_storage[node_count].left_child = -1;
+        node_storage[node_count].right_child = -1;
+
+        int thisNodeIndex = node_count;
+        node_count = node_count + 1;
+        return thisNodeIndex;
+    }
+    else{
+        SplitResult split = findBestSplit(allFeatures, allLabels, sampleIndices, sampleIndexCount);
+        size_t leftIndices[MaxNodes];
+        size_t rightIndices[MaxNodes];
+        size_t leftCount = 0;
+        size_t rightCount = 0;
+
+        for (size_t i = 0; i < sampleIndexCount; i++){
+            float value = allFeatures[sampleIndices[i] * NumFeatures + split.feature_index];
+            if (value <= split.threshold){
+                leftIndices[leftCount] = sampleIndices[i];
+                leftCount = leftCount + 1;
+            }
+            else{
+                rightIndices[rightCount] = sampleIndices[i];
+                rightCount = rightCount + 1;
+            }
+        }
+        int leftChildIndex = buildNode(allFeatures, allLabels, leftIndices, leftCount, currentDepth + 1, minSamplesToSplit, maxDepth);
+        int rightChildIndex = buildNode(allFeatures, allLabels, rightIndices, rightCount, currentDepth + 1, minSamplesToSplit, maxDepth);
+
+        node_storage[node_count].depth = currentDepth;
+        node_storage[node_count].feature_index = split.feature_index;
+        node_storage[node_count].threshold = split.threshold;
+        node_storage[node_count].left_child = leftChildIndex;
+        node_storage[node_count].right_child = rightChildIndex;
+
+        int thisNodeIndex = node_count;
+        node_count = node_count + 1;
+        return thisNodeIndex;
+    }}
 
 public:
     bool addSample(float* features, uint8_t label)
@@ -203,11 +261,21 @@ public:
     {
     // ENTRY POINT: RESET nodeCount, CALL buildNode ON THE FULL SET OF SAMPLE INDICES 
     // STARTING AT DEPTH 0. MUST RETURN size_t (total nodes used)
+    node_count = 0;
+    
+    size_t allIndices[MaxNodes];
+    for (size_t i = 0; i < sample_count; i++){
+        allIndices[i] = i;
+    }
+    buildNode(sampleFeatures, sampleLabels, allIndices, sample_count, 0, minSamplesToSplit, maxDepth);
+
+    return node_count;
     }
 
     const Node* nodes() const
     {
     // RETURN A POINTER TO THE INTERNAL NODE ARRAY (READ-ONLY) SO DecisionTreeClassifier 
     // CAN USE IT. MUST RETURN const Node*
+    return node_storage;
     }
 };
