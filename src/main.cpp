@@ -39,6 +39,9 @@ const char *MQTT_HEATLED_STATE_TOPIC = "week6/HealthyHome/actuator/heat_led/stat
 const char *MQTT_COOLLED_STATE_TOPIC = "week6/HealthyHome/actuator/cool_led/state";
 const char *MQTT_BRIGHTLED_STATE_TOPIC = "week6/HealthyHome/actuator/bright_led/state";
 const char *MQTT_BUZZER_STATE_TOPIC = "week6/HealthyHome/actuator/buzzer/state";
+const char *MQTT_MODE_TOPIC = "week6/HealthyHome/mode/set";
+
+bool customMode = false;
 
 const unsigned long DHT_PUBLISH_INTERVAL_MS = 5000;
 const unsigned long MQTT_RETRY_INTERVAL_MS = 5000;
@@ -66,7 +69,7 @@ DHT dht(DHTPIN, DHTTYPE);
 int HOTLEDPIN = 13;
 int COLDLEDPIN = 14;
 
-enum systemState {normal, cooling, heating};
+enum systemState {normal, cooling, heating, custom};
 systemState state = normal;
 
 //LDR setup
@@ -360,6 +363,27 @@ void CallbackMqtt(char *topic, byte *payload, unsigned int length)
 
     return;
   }
+
+  // CUSTOM / AUTOMATIC MODE
+
+  if (strcmp(topic, MQTT_MODE_TOPIC) == 0)
+  {
+    if (strcmp(message, "true") == 0)
+    {
+      customMode = true;
+      Serial.println("CUSTOM MODE ON");
+    }
+    else if (strcmp(message, "false") == 0)
+    {
+      customMode = false;
+
+      state = normal;
+
+      Serial.println("AUTOMATIC MODE ON");
+    }
+
+    return;
+  }
 }
 
 void SetupDht()
@@ -490,6 +514,15 @@ void ConnectToMqtt()
       {
         Serial.println("MQTT subscription failed.");
       }
+      if (mqttClient.subscribe(MQTT_MODE_TOPIC))
+      {
+        Serial.print("Subscribed to: ");
+        Serial.println(MQTT_MODE_TOPIC);
+      }
+      else
+      {
+        Serial.println("MQTT mode subscription failed.");
+      }
     }
     else
     {
@@ -609,7 +642,6 @@ bool everSeenMotion = false;
 
 // Short press: toggle which label new samples get. Long press: stop
 // collecting and train the tree from everything gathered so far.
-/*
 void handleCalibrationButton() {
   bool down = (digitalRead(CALIB_BUTTON_PIN) == LOW);
 
@@ -659,7 +691,7 @@ void updateOccupancy(float temperature, float humidity, float lightPct, bool pir
     // TODO: feed `occupied` into the automation rules below (e.g. only
     // let PIR-driven behaviour during bed/winddown act if occupied).
   }
-}*/
+}
 
 void setup() {
   Serial.begin(115200);
@@ -799,16 +831,18 @@ void loop() {
   // Manage States  
 
   //RTC time state management
-  if(now.hour() == 7){
-    timeState = rising;
-  } else if (now.hour() == 8){
-    timeState = wake;
-  } else if (now.hour() == 20){
-    timeState = winddown;
-  } else if (now.hour() >= 21 || now.hour() < 7){
-    timeState = bed;
-  } else {
-    timeState = day;
+  if (!customMode){
+    if(now.hour() == 7){
+      timeState = rising;
+    } else if (now.hour() == 8){
+      timeState = wake;
+    } else if (now.hour() == 20){
+      timeState = winddown;
+    } else if (now.hour() >= 21 || now.hour() < 7){
+      timeState = bed;
+    } else {
+      timeState = day;
+    }
   }
 
   updateDisplay(now, timeState);
@@ -822,25 +856,29 @@ void loop() {
   }
 
   //Air con state management
-  switch (state) {
-    case cooling:
-      if (temperature < maxtemp - hysteresis) { //Cooling state that switches off at 23
-        state = normal;
-      }
-      break;
-    case heating:
-      if (temperature > mintemp + hysteresis) { //Heating state that switches off at 19
-        state = normal;
-      }
-      break;
-    case normal:
-      if (temperature > maxtemp) {
-        state = cooling;
-      }                                          //Normal state checking for temperature breach
-      else if (temperature < mintemp) {
-        state = heating;
-      }
-      break;
+  if (!customMode){
+    switch (state) {
+      case cooling:
+        if (temperature < maxtemp - hysteresis) { //Cooling state that switches off at 23
+          state = normal;
+        }
+        break;
+      case heating:
+        if (temperature > mintemp + hysteresis) { //Heating state that switches off at 19
+          state = normal;
+        }
+        break;
+      case normal:
+        if (temperature > maxtemp) {
+          state = cooling;
+        }                                          //Normal state checking for temperature breach
+        else if (temperature < mintemp) {
+          state = heating;
+        }
+        break;
+    }
+  } else {
+    state = custom;
   }
 
   //Time Based Rules Using RTC
@@ -848,83 +886,87 @@ void loop() {
 
   //Rising: fade the light up across the hour, driven by the clock
   //itself rather than a per-loop increment (see fadeLevel() above).
-  if (timeState == rising) {
-    alarmFiredThisCycle = false; //arm the wake alarm for this lap
-    pwmval = fadeLevel(now, true);
-    analogWrite(PWMPIN, pwmval);
-    myServo.write(floor(pwmval / 1.41));
-  }
+  if(!customMode){
+    if (timeState == rising) {
+      alarmFiredThisCycle = false; //arm the wake alarm for this lap
+      pwmval = fadeLevel(now, true);
+      analogWrite(PWMPIN, pwmval);
+      myServo.write(floor(pwmval / 1.41));
+    }
 
-  //Wake: alarm fires once, right as the state is entered.
-  if (timeState == wake && !alarmFiredThisCycle) {
-    tone(BUZZERPIN, 500, 500);
-    alarmFiredThisCycle = true;
-  }
+    //Wake: alarm fires once, right as the state is entered.
+    if (timeState == wake && !alarmFiredThisCycle) {
+      tone(BUZZERPIN, 500, 500);
+      alarmFiredThisCycle = true;
+    }
 
-  //LDR Logic for wake/day time states
-  Serial.print("LDR Value: ");
-  Serial.println(ldrval);
+    //LDR Logic for wake/day time states
+    Serial.print("LDR Value: ");
+    Serial.println(ldrval);
 
-  if (!lightOn && ldrval > LDR_THRESHOLD) {
-    lightOn = true;
-    Serial.println("Light ON");
-  } else if (lightOn && ldrval < LDR_THRESHOLD_OFF) {
-    lightOn = false;
-    Serial.println("Light OFF");
-  }
+    if (!lightOn && ldrval > LDR_THRESHOLD) {
+      lightOn = true;
+      Serial.println("Light ON");
+    } else if (lightOn && ldrval < LDR_THRESHOLD_OFF) {
+      lightOn = false;
+      Serial.println("Light OFF");
+    }
 
-  // LDR controlling light after rising
-  if (timeState == day || timeState == wake) {
-    if (lightOn) {
-      analogWrite(PWMPIN, 255);
-    } else {
+    // LDR controlling light after rising
+    if (timeState == day || timeState == wake) {
+      if (lightOn) {
+        analogWrite(PWMPIN, 255);
+      } else {
+        analogWrite(PWMPIN, 0);
+      }
+    }
+
+    //Winddown: fade the light back down across the hour, same
+    //clock-driven approach as the rising fade.
+    if (timeState == winddown) {
+      pwmval = fadeLevel(now, false);
+      analogWrite(PWMPIN, pwmval);
+      myServo.write(floor(pwmval / 1.41));
+    }
+
+    if (timeState == bed) {
       analogWrite(PWMPIN, 0);
+      myServo.write(0);
+      lightOn = false;
     }
-  }
 
-  //Winddown: fade the light back down across the hour, same
-  //clock-driven approach as the rising fade.
-  if (timeState == winddown) {
-    pwmval = fadeLevel(now, false);
-    analogWrite(PWMPIN, pwmval);
-    myServo.write(floor(pwmval / 1.41));
-  }
-
-  if (timeState == bed) {
-    analogWrite(PWMPIN, 0);
-    myServo.write(0);
-    lightOn = false;
-  }
-
-  //PIR Motion Detector
-  PIRval = digitalRead(PIRPIN);
-  if(PIRval == HIGH && (timeState == bed || timeState == winddown)){
-    digitalWrite(PIRLEDPIN, HIGH);
-    if (PIRSTATE == LOW){
-      Serial.println("Motion Detected"); //Motion sensor LED turns on
-      PIRSTATE = HIGH;
+    //PIR Motion Detector
+    PIRval = digitalRead(PIRPIN);
+    if(PIRval == HIGH && (timeState == bed || timeState == winddown)){
+      digitalWrite(PIRLEDPIN, HIGH);
+      if (PIRSTATE == LOW){
+        Serial.println("Motion Detected"); //Motion sensor LED turns on
+        PIRSTATE = HIGH;
+      }
+    } else {
+      digitalWrite(PIRLEDPIN, LOW);
+      if (PIRSTATE == HIGH){
+        Serial.println("Motion Ended");
+      }
+      PIRSTATE = LOW;
     }
-  } else {
-    digitalWrite(PIRLEDPIN, LOW);
-    if (PIRSTATE == HIGH){
-      Serial.println("Motion Ended");
-    }
-    PIRSTATE = LOW;
   }
 
   //Air con proxy lights signifying heating (red) and cooling (blue)
-  if (state == cooling) {
-    digitalWrite(COLDLEDPIN, HIGH);
-    digitalWrite(HOTLEDPIN, LOW);
-    Serial.println("Cooling Activated!");
-  } else if (state == heating) {
-    digitalWrite(HOTLEDPIN, HIGH);
-    digitalWrite(COLDLEDPIN, LOW);
-    Serial.println("Heating Activated!");
-  } else {
-    digitalWrite(COLDLEDPIN, LOW);
-    digitalWrite(HOTLEDPIN, LOW);
-    Serial.println("Good Temperature!");
+  if (!customMode){
+    if (state == cooling) {
+      digitalWrite(COLDLEDPIN, HIGH);
+      digitalWrite(HOTLEDPIN, LOW);
+      Serial.println("Cooling Activated!");
+    } else if (state == heating) {
+      digitalWrite(HOTLEDPIN, HIGH);
+      digitalWrite(COLDLEDPIN, LOW);
+      Serial.println("Heating Activated!");
+    } else {
+      digitalWrite(COLDLEDPIN, LOW);
+      digitalWrite(HOTLEDPIN, LOW);
+      Serial.println("Good Temperature!");
+    }
   }
 
   //MQTT Communication
@@ -975,8 +1017,6 @@ void loop() {
   (void)cmd;
 
   //Edge AI: occupancy calibration/prediction (button on CALIB_BUTTON_PIN)
-  /*
   handleCalibrationButton();
   updateOccupancy(temperature, humidity, tele.light, PIRval == HIGH);
-  */
 }
