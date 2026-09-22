@@ -1,5 +1,5 @@
 #include "net.h"
-#include "config.h"
+#include "../config.h"
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>

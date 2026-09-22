@@ -15,8 +15,10 @@
 /* THIS IS ALL OF THE STUFF WE'vVE WRITTEN */
 
 // Everything "edge ai" related for the marks here
-#include "../decision_tree.h"
-#include "../decision_tree_trainer.h"
+#include "decision_tree.h"
+#include "decision_tree_trainer.h"
+
+#include "net.h"
 
 // all of the refactor files
 #include "constants.h"
