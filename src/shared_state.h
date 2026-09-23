@@ -3,3 +3,4 @@
 
 extern bool customMode;
 extern systemState state;
+extern TimeState timeState;

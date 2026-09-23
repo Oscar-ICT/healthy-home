@@ -159,6 +159,12 @@ void CallbackMqtt(char *topic, byte *payload, unsigned int length)
 
       state = normal;
 
+      if (timeState == day || timeState == wake || timeState == rising) {
+        SetServoAngle(180);
+      } else if (timeState == bed || timeState == winddown) {
+        SetServoAngle(0);
+      }
+
       Serial.println("AUTOMATIC MODE ON");
     }
 

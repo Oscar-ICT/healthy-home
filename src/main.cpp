@@ -107,9 +107,6 @@ void setup() {
   //PWM PIN
   pinMode(PWMPIN, OUTPUT);
 
-  //Servo
-  myServo.attach(SERVOPIN);
-
   //Network: WiFi + ThingSpeak (spawns the net task on core 0)
   netBegin();
 }
@@ -223,7 +220,8 @@ void loop() {
       alarmFiredThisCycle = false; //arm the wake alarm for this lap
       pwmval = fadeLevel(now, true);
       analogWrite(PWMPIN, pwmval);
-      myServo.write(floor(pwmval / 1.41));
+      int servoAngle = floor(pwmval / 1.41);
+      SetServoAngle(servoAngle);
     }
 
     //Wake: alarm fires once, right as the state is entered.
@@ -233,9 +231,6 @@ void loop() {
     }
 
     //LDR Logic for wake/day time states
-    Serial.print("LDR Value: ");
-    Serial.println(ldrval);
-
     if (!lightOn && ldrval > LDR_THRESHOLD) {
       lightOn = true;
       Serial.println("Light ON");
@@ -246,6 +241,7 @@ void loop() {
 
     // LDR controlling light after rising
     if (timeState == day || timeState == wake) {
+      SetServoAngle(180);
       if (lightOn) {
         analogWrite(PWMPIN, 255);
       } else {
@@ -258,12 +254,12 @@ void loop() {
     if (timeState == winddown) {
       pwmval = fadeLevel(now, false);
       analogWrite(PWMPIN, pwmval);
-      myServo.write(floor(pwmval / 1.41));
-    }
+      int servoAngle = floor(pwmval / 1.41);
+      SetServoAngle(servoAngle);    }
 
     if (timeState == bed) {
       analogWrite(PWMPIN, 0);
-      myServo.write(0);
+      SetServoAngle(0);
       lightOn = false;
     }
 
@@ -351,4 +347,5 @@ void loop() {
   //Edge AI: occupancy calibration/prediction (button on CALIB_BUTTON_PIN)
   handleCalibrationButton();
   updateOccupancy(temperature, humidity, tele.light, PIRval == HIGH);
+  Serial.print(currentServoAngle);
 }
