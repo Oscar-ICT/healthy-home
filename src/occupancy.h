@@ -5,8 +5,7 @@
 // pressed = LOW). Short press toggles which label new samples get;
 // holding it down for LONG_PRESS_MS trains the tree from whatever's
 // been collected and switches from CALIBRATING to RUNNING.
-
-void SetupOccupancy();
+#define CALIB_BUTTON_PIN 4
 
 // Short press: toggle which label new samples get. Long press: stop
 // collecting and train the tree from everything gathered so far.

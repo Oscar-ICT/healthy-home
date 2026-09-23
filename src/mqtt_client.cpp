@@ -1,18 +1,14 @@
 #include "mqtt_client.h"
-
-#include <Arduino.h>
-#include <WiFi.h>
-
+#include "mqtt_topics.h"
 #include "mqtt_commands.h"
 #include "mqtt_publish.h"
-#include "mqtt_topics.h"
-
-namespace {
+#include "servo_control.h"
 
 WiFiClient wifiClient;
-bool customMode = false;
+PubSubClient mqttClient(wifiClient);
 
-String CreateMqttClientId() {
+String CreateMqttClientId()
+{
   const uint64_t chipId = ESP.getEfuseMac();
   const unsigned long high = static_cast<unsigned long>(chipId >> 32);
   const unsigned long low = static_cast<unsigned long>(chipId);
@@ -20,18 +16,6 @@ String CreateMqttClientId() {
   char clientId[40];
   snprintf(clientId, sizeof(clientId), "ESP32Client-%08lX%08lX", high, low);
   return String(clientId);
-}
-
-}  // namespace
-
-PubSubClient mqttClient(wifiClient);
-
-bool CustomModeActive() {
-  return customMode;
-}
-
-void SetCustomMode(bool enabled) {
-  customMode = enabled;
 }
 
 void SetupMqtt()
@@ -139,6 +123,8 @@ void ConnectToMqtt()
         Serial.println("MQTT buzzer subscription failed.");
       }
 
+      servoStateNeedsPublish = true;
+
       if (mqttClient.subscribe(MQTT_COMMAND_TOPIC))
       {
         Serial.print("Subscribed to: ");
@@ -167,20 +153,4 @@ void ConnectToMqtt()
     }
   }
   SetActuatorStates();
-}
-
-void MaintainMqttConnection()
-{
-  if (WiFi.status() != WL_CONNECTED)
-  {
-    ConnectToWiFi();
-  }
-
-  if (!mqttClient.connected())
-  {
-    ConnectToMqtt();
-  }
-
-  // Must run frequently to maintain the MQTT connection and receive messages.
-  mqttClient.loop();
 }

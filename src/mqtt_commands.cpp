@@ -1,13 +1,9 @@
 #include "mqtt_commands.h"
-
-#include <Arduino.h>
-
-#include "climate_control.h"
-#include "mqtt_client.h"
-#include "mqtt_publish.h"
 #include "mqtt_topics.h"
-#include "pins.h"
+#include "mqtt_publish.h"
 #include "servo_control.h"
+#include "shared_state.h"
+#include "pins.h"
 
 void CallbackMqtt(char *topic, byte *payload, unsigned int length)
 {
@@ -154,14 +150,14 @@ void CallbackMqtt(char *topic, byte *payload, unsigned int length)
   {
     if (strcmp(message, "true") == 0)
     {
-      SetCustomMode(true);
+      customMode = true;
       Serial.println("CUSTOM MODE ON");
     }
     else if (strcmp(message, "false") == 0)
     {
-      SetCustomMode(false);
+      customMode = false;
 
-      ResetClimateToNormal();
+      state = normal;
 
       Serial.println("AUTOMATIC MODE ON");
     }

@@ -1,22 +1,10 @@
 #include "mqtt_publish.h"
-
-#include <Arduino.h>
-
-#include "daily_routine.h"
 #include "mqtt_client.h"
 #include "mqtt_topics.h"
 #include "pins.h"
 #include "servo_control.h"
 
-namespace {
-
-// Never actually set anywhere (the wake alarm and buzzer/set MQTT
-// handler both just fire tone()/noTone() without recording it here) -
-// the published buzzer state topic is therefore always "0". Preserved
-// as-is from the original rather than fixed as part of this refactor.
 bool buzzerState = false;
-
-}  // namespace
 
 void SetActuatorStates()
 {
@@ -40,7 +28,7 @@ void SetActuatorStates()
 
   mqttClient.publish(
     MQTT_BRIGHTLED_STATE_TOPIC,
-    DailyRoutineBrightness() > 0 ? "1" : "0",
+    pwmval > 0 ? "1" : "0",
     true
   );
 
@@ -79,7 +67,10 @@ void PublishDhtReadings(float temperature, float humidity)
 
 void PublishPirReading(int pirValue)
 {
+  const char *motionText = (pirValue == HIGH) ? "Motion Detected" : "No Motion";
+
   const char *motionValue = (pirValue == HIGH) ? "1" : "0";
+
 
   if (mqttClient.publish(MQTT_PIR_TOPIC, motionValue))
   {
@@ -110,17 +101,17 @@ void PublishLdrReading(int ldrValue)
 
 void PublishServoState()
 {
-  if (!ServoStatePendingPublish())
+  if (!servoStateNeedsPublish)
   {
     return;
   }
 
   char servoAngleText[8];
-  snprintf(servoAngleText, sizeof(servoAngleText), "%d", CurrentServoAngle());
+  snprintf(servoAngleText, sizeof(servoAngleText), "%d", currentServoAngle);
 
   if (mqttClient.publish(MQTT_SERVO_STATE_TOPIC, servoAngleText, true))
   {
-    ClearServoStatePendingPublish();
+    servoStateNeedsPublish = false;
 
     Serial.print("Published servo state to MQTT: ");
     Serial.println(servoAngleText);

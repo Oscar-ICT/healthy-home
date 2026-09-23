@@ -1,12 +1,11 @@
 #include "occupancy.h"
-
 #include <Arduino.h>
-
 #include "decision_tree.h"
 #include "decision_tree_trainer.h"
-#include "pins.h"
 
-namespace {
+const unsigned long LONG_PRESS_MS = 1500;
+const unsigned long SAMPLE_INTERVAL_MS = 2000;
+const unsigned long OCC_MOTION_HOLD_MS = 30000;
 
 DecisionTreeTrainer<150, 4> occupancyTrainer;   // features: motionRecent, light, temperature, humidity
 DecisionTreeClassifier* occupancyClassifier = nullptr;
@@ -21,13 +20,6 @@ bool buttonWasDown = false;
 
 unsigned long lastMotionMillis = 0;
 bool everSeenMotion = false;
-
-}  // namespace
-
-void SetupOccupancy() {
-  pinMode(CALIB_BUTTON_PIN, INPUT_PULLUP);
-  Serial.println("[occupancy] CALIBRATING: short-press toggles label, long-press (>1.5s) trains.");
-}
 
 void handleCalibrationButton() {
   bool down = (digitalRead(CALIB_BUTTON_PIN) == LOW);
