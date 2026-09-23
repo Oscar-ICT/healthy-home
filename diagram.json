@@ -103,13 +103,6 @@
       "attrs": { "i2cAddress": "0x3c" }
     },
     {
-      "type": "wokwi-pushbutton",
-      "id": "btn1",
-      "top": 131,
-      "left": 192,
-      "attrs": { "color": "green", "xray": "1" }
-    },
-    {
       "type": "wokwi-text",
       "id": "text1",
       "top": -288,
@@ -180,6 +173,13 @@
       "attrs": {
         "text": "Wire Colour Legend:\nBlack is ground\nYellow is 5V or 3V power to the breadboard\nOrange is power to the ESP32\nRed is Control & Actuation (Outputs)\nGreen is for Data & Signals (Inputs)"
       }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn1",
+      "top": 111.8,
+      "left": 163.2,
+      "attrs": { "color": "green", "xray": "1" }
     }
   ],
   "connections": [
@@ -223,11 +223,11 @@
     [ "esp:21", "oled1:SDA", "red", [ "h28.8", "v-86.4", "h-317.9" ] ],
     [ "esp:22", "oled1:SCL", "red", [ "h19.2", "v-67.2", "h-318.13" ] ],
     [ "oled1:GND", "bb2:tn.9", "black", [ "v-234.46", "h661.83" ] ],
-    [ "esp:4", "btn1:1.l", "green", [ "h0" ] ],
-    [ "bb2:tn.4", "btn1:1.r", "black", [ "v-28.9", "h-104", "v153.6" ] ],
     [ "dht1:VCC", "bb2:1b.g", "gold", [ "v28.8", "h38.4", "v364.8", "h374.4", "v-134.4" ] ],
     [ "esp:3V3", "bb2:1b.h", "orange", [ "h-67.05", "v240", "h355.2", "v-134.4" ] ],
-    [ "oled1:VCC", "bb2:1b.f", "gold", [ "v-71.26", "h125.98", "v134.4", "h393.6", "v-134.4" ] ]
+    [ "oled1:VCC", "bb2:1b.f", "gold", [ "v-71.26", "h125.98", "v134.4", "h393.6", "v-134.4" ] ],
+    [ "btn1:1.r", "bb2:tn.4", "black", [ "h48.2", "v-163.2", "h104" ] ],
+    [ "btn1:2.l", "esp:4", "green", [ "h-19.2", "v-19" ] ]
   ],
   "dependencies": {}
 }

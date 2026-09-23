@@ -112,7 +112,21 @@ void setup() {
 }
 
 void loop() {
-  delay(2000); // this speeds up the simulation
+  // Poll the button on every pass through loop() (not gated behind the
+  // 2s cycle below) so short-press vs long-press timing is accurate.
+  // Previously this only ran once every ~2s because of a blocking
+  // delay(2000) at the top of loop(), which meant a normal quick press
+  // almost always looked like it spanned the whole gap between polls
+  // and got misread as a long press (button toggle got stuck) or
+  // missed the hold window entirely (training never triggered).
+  handleCalibrationButton();
+
+  static unsigned long lastCycleMillis = 0;
+  unsigned long nowMillis = millis();
+  if (nowMillis - lastCycleMillis < 2000) {
+    return; // re-enter loop() immediately instead of blocking with delay()
+  }
+  lastCycleMillis = nowMillis;
 
   // Sensor readings
 
@@ -345,7 +359,6 @@ void loop() {
   (void)cmd;
 
   //Edge AI: occupancy calibration/prediction (button on CALIB_BUTTON_PIN)
-  handleCalibrationButton();
   updateOccupancy(temperature, humidity, tele.light, PIRval == HIGH);
   Serial.print(currentServoAngle);
 }
