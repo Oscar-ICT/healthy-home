@@ -1,0 +1,1722 @@
+[
+    {
+        "id": "28108ad58b0a4a14",
+        "type": "tab",
+        "label": "Flow 1",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "b17a4b2254ba0ffe",
+        "type": "tab",
+        "label": "Healthy Home IoT System",
+        "disabled": false,
+        "info": "Workshop flow for ESP32 + DHT22 + Servo using MQTT, HiveMQ, Node-RED and FlowFuse Dashboard 2.0."
+    },
+    {
+        "id": "wk06_mqtt_hivemq",
+        "type": "mqtt-broker",
+        "name": "Public HiveMQ",
+        "broker": "broker.hivemq.com",
+        "port": "1883",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "wk06_ui_base",
+        "type": "ui-base",
+        "name": "Week 6 IoT Dashboard",
+        "path": "/dashboard",
+        "appIcon": "",
+        "includeClientData": true,
+        "acceptsClientConfig": [
+            "ui-notification",
+            "ui-control"
+        ],
+        "showPathInSidebar": false,
+        "headerContent": "page",
+        "navigationStyle": "default",
+        "titleBarStyle": "default",
+        "showReconnectNotification": true,
+        "notificationDisplayTime": "1",
+        "showDisconnectNotification": true,
+        "allowInstall": false
+    },
+    {
+        "id": "wk06_ui_theme",
+        "type": "ui-theme",
+        "name": "Week 6 Theme",
+        "colors": {
+            "surface": "#ffffff",
+            "primary": "#e2231a",
+            "bgPage": "#f4f5f7",
+            "groupBg": "#ffffff",
+            "groupOutline": "#d9dee7"
+        },
+        "sizes": {
+            "density": "default",
+            "pagePadding": "12px",
+            "groupGap": "12px",
+            "groupBorderRadius": "4px",
+            "widgetGap": "12px"
+        }
+    },
+    {
+        "id": "wk06_ui_page",
+        "type": "ui-page",
+        "name": "ESP32 IoT System",
+        "ui": "wk06_ui_base",
+        "path": "/week6-iot",
+        "icon": "home",
+        "layout": "grid",
+        "theme": "wk06_ui_theme",
+        "breakpoints": [
+            {
+                "name": "Default",
+                "px": 0,
+                "cols": 3
+            },
+            {
+                "name": "Tablet",
+                "px": 576,
+                "cols": 6
+            },
+            {
+                "name": "Small Desktop",
+                "px": 768,
+                "cols": 9
+            },
+            {
+                "name": "Desktop",
+                "px": 1024,
+                "cols": 12
+            }
+        ],
+        "order": 1,
+        "className": "",
+        "visible": true,
+        "disabled": false
+    },
+    {
+        "id": "wk06_group_sensor",
+        "type": "ui-group",
+        "name": "Live Sensor Data",
+        "page": "wk06_ui_page",
+        "width": 6,
+        "height": 1,
+        "order": 2,
+        "showTitle": true,
+        "className": "",
+        "visible": "true",
+        "disabled": false,
+        "groupType": "default"
+    },
+    {
+        "id": "wk06_group_chart",
+        "type": "ui-group",
+        "name": "Live Sensor Chart",
+        "page": "wk06_ui_page",
+        "width": 6,
+        "height": 1,
+        "order": 3,
+        "showTitle": true,
+        "className": "",
+        "visible": true,
+        "disabled": false,
+        "groupType": "default"
+    },
+    {
+        "id": "4b08cf5c58b5246a",
+        "type": "ui-group",
+        "name": "Alarm and LEDs",
+        "page": "wk06_ui_page",
+        "width": 6,
+        "height": 1,
+        "order": 1,
+        "showTitle": true,
+        "className": "",
+        "visible": true,
+        "disabled": false,
+        "groupType": "default"
+    },
+    {
+        "id": "74437f4126d428e0",
+        "type": "ui-group",
+        "d": true,
+        "name": "RTC / LDR / PIR",
+        "page": "wk06_ui_page",
+        "width": 6,
+        "height": 1,
+        "order": 5,
+        "showTitle": true,
+        "className": "",
+        "visible": false,
+        "disabled": false,
+        "groupType": "default"
+    },
+    {
+        "id": "08d2d295135b3721",
+        "type": "mqtt in",
+        "z": "b17a4b2254ba0ffe",
+        "name": "MQTT in: temperature",
+        "topic": "week6/HealthyHome/sensor/temperature",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "wk06_mqtt_hivemq",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 170,
+        "y": 100,
+        "wires": [
+            [
+                "04d1775d01345141"
+            ]
+        ]
+    },
+    {
+        "id": "04d1775d01345141",
+        "type": "function",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Parse temperature",
+        "func": "const value = Number(msg.payload);\nif (Number.isNaN(value)) {\n    node.warn(`Invalid temperature payload: ${msg.payload}`);\n    return null;\n}\nmsg.payload = Number(value.toFixed(1));\nmsg.topic = \"Temperature\";\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 390,
+        "y": 100,
+        "wires": [
+            [
+                "51b891de30965dfb",
+                "8aebb6bfd6f53758",
+                "4b65f4dadeec7b42"
+            ]
+        ]
+    },
+    {
+        "id": "23395901e7c3b823",
+        "type": "mqtt in",
+        "z": "b17a4b2254ba0ffe",
+        "name": "MQTT in: humidity",
+        "topic": "week6/HealthyHome/sensor/humidity",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "wk06_mqtt_hivemq",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 170,
+        "y": 180,
+        "wires": [
+            [
+                "14e72469b7f0e613"
+            ]
+        ]
+    },
+    {
+        "id": "14e72469b7f0e613",
+        "type": "function",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Parse humidity",
+        "func": "const value = Number(msg.payload);\nif (Number.isNaN(value)) {\n    node.warn(`Invalid humidity payload: ${msg.payload}`);\n    return null;\n}\nmsg.payload = Number(value.toFixed(1));\nmsg.topic = \"Humidity\";\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 390,
+        "y": 180,
+        "wires": [
+            [
+                "3b999b5a89a5b6d2",
+                "8aebb6bfd6f53758",
+                "615f91b1551d3d31"
+            ]
+        ]
+    },
+    {
+        "id": "51b891de30965dfb",
+        "type": "ui-gauge",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Temperature Gauge",
+        "group": "wk06_group_sensor",
+        "order": 2,
+        "value": "payload",
+        "valueType": "msg",
+        "width": 3,
+        "height": 3,
+        "gtype": "gauge-half",
+        "gstyle": "needle",
+        "title": "Temperature",
+        "alwaysShowTitle": false,
+        "floatingTitlePosition": "top-left",
+        "units": "deg C",
+        "icon": "",
+        "prefix": "",
+        "suffix": "",
+        "segments": [
+            {
+                "from": 0,
+                "color": "#5CD65C",
+                "text": "",
+                "textType": "label"
+            },
+            {
+                "from": 25,
+                "color": "#FFC800",
+                "text": "",
+                "textType": "label"
+            },
+            {
+                "from": 35,
+                "color": "#EA5353",
+                "text": "",
+                "textType": "label"
+            }
+        ],
+        "min": 0,
+        "max": 50,
+        "sizeThickness": 16,
+        "sizeGap": 4,
+        "sizeKeyThickness": 8,
+        "styleRounded": true,
+        "styleGlow": false,
+        "className": "",
+        "x": 680,
+        "y": 60,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "3b999b5a89a5b6d2",
+        "type": "ui-gauge",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Humidity Gauge",
+        "group": "wk06_group_sensor",
+        "order": 3,
+        "value": "payload",
+        "valueType": "msg",
+        "width": 3,
+        "height": 3,
+        "gtype": "gauge-half",
+        "gstyle": "needle",
+        "title": "Humidity",
+        "alwaysShowTitle": false,
+        "floatingTitlePosition": "top-left",
+        "units": "%",
+        "icon": "",
+        "prefix": "",
+        "suffix": "%",
+        "segments": [
+            {
+                "from": "0",
+                "color": "#ffc800",
+                "text": "",
+                "textType": "label"
+            },
+            {
+                "from": "40",
+                "color": "#5cd65c",
+                "text": "",
+                "textType": "label"
+            },
+            {
+                "from": "70",
+                "color": "#0095ff",
+                "text": "",
+                "textType": "label"
+            }
+        ],
+        "min": 0,
+        "max": 100,
+        "sizeThickness": 16,
+        "sizeGap": 4,
+        "sizeKeyThickness": 8,
+        "styleRounded": true,
+        "styleGlow": false,
+        "className": "",
+        "x": 680,
+        "y": 160,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "8aebb6bfd6f53758",
+        "type": "ui-chart",
+        "z": "b17a4b2254ba0ffe",
+        "group": "wk06_group_chart",
+        "name": "Temperature and Humidity Chart",
+        "label": "Temperature / Humidity / Light",
+        "order": 1,
+        "chartType": "line",
+        "category": "topic",
+        "categoryType": "msg",
+        "xAxisLabel": "Time",
+        "xAxisProperty": "",
+        "xAxisPropertyType": "timestamp",
+        "xAxisType": "time",
+        "xAxisFormat": "",
+        "xAxisFormatType": "auto",
+        "xmin": "",
+        "xmax": "",
+        "yAxisLabel": "Value",
+        "yAxisProperty": "payload",
+        "yAxisPropertyType": "msg",
+        "ymin": "",
+        "ymax": "",
+        "bins": 10,
+        "action": "append",
+        "stackSeries": false,
+        "pointShape": "circle",
+        "pointRadius": 3,
+        "showLegend": true,
+        "removeOlder": 10,
+        "removeOlderUnit": "60",
+        "removeOlderPoints": "",
+        "colors": [
+            "#e2231a",
+            "#0095ff",
+            "#ff7f0e",
+            "#2ca02c",
+            "#a347e1",
+            "#d62728",
+            "#ff9896",
+            "#9467bd",
+            "#c5b0d5"
+        ],
+        "textColor": [
+            "#666666"
+        ],
+        "textColorDefault": true,
+        "gridColor": [
+            "#e5e5e5"
+        ],
+        "gridColorDefault": true,
+        "width": 6,
+        "height": 6,
+        "className": "",
+        "interpolation": "linear",
+        "x": 750,
+        "y": 280,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "8727349232496ae7",
+        "type": "ui-slider",
+        "z": "b17a4b2254ba0ffe",
+        "group": "4b08cf5c58b5246a",
+        "name": "Servo Angle Slider",
+        "label": "Servo Angle",
+        "tooltip": "",
+        "order": 2,
+        "width": 6,
+        "height": 1,
+        "passthru": false,
+        "outs": "end",
+        "topic": "week6/HealthyHome/actuator/servo/set",
+        "topicType": "str",
+        "thumbLabel": "always",
+        "showTicks": "always",
+        "min": 0,
+        "max": 180,
+        "step": 1,
+        "className": "",
+        "iconPrepend": "",
+        "iconAppend": "",
+        "color": "#e2231a",
+        "colorTrack": "",
+        "colorThumb": "",
+        "showTextField": true,
+        "x": 170,
+        "y": 380,
+        "wires": [
+            [
+                "3fa10b1a92b266a7"
+            ]
+        ]
+    },
+    {
+        "id": "3fa10b1a92b266a7",
+        "type": "function",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Clamp servo angle",
+        "func": "let angle = Number(msg.payload);\nif (Number.isNaN(angle)) {\n    node.warn(`Invalid servo angle: ${msg.payload}`);\n    return null;\n}\nangle = Math.max(0, Math.min(180, Math.round(angle)));\nmsg.payload = angle;\nmsg.topic = \"week6/HealthyHome/actuator/servo/set\";\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 380,
+        "wires": [
+            [
+                "50da2437fe3b6283",
+                "a1695cae95094ae9"
+            ]
+        ]
+    },
+    {
+        "id": "50da2437fe3b6283",
+        "type": "mqtt out",
+        "z": "b17a4b2254ba0ffe",
+        "name": "MQTT out: servo set",
+        "topic": "",
+        "qos": "0",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "wk06_mqtt_hivemq",
+        "x": 680,
+        "y": 360,
+        "wires": []
+    },
+    {
+        "id": "1fb50674cc3f1ff7",
+        "type": "mqtt in",
+        "z": "b17a4b2254ba0ffe",
+        "name": "MQTT in: servo state",
+        "topic": "week6/HealthyHome/actuator/servo/state",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "wk06_mqtt_hivemq",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 170,
+        "y": 460,
+        "wires": [
+            [
+                "3f0bcca181ceba13"
+            ]
+        ]
+    },
+    {
+        "id": "3f0bcca181ceba13",
+        "type": "function",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Parse servo state",
+        "func": "const value = Number(msg.payload);\nif (Number.isNaN(value)) {\n    node.warn(`Invalid servo state payload: ${msg.payload}`);\n    return null;\n}\nmsg.payload = Math.round(value);\nmsg.topic = \"Servo State\";\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 460,
+        "wires": [
+            [
+                "239455e51d9afcdd"
+            ]
+        ]
+    },
+    {
+        "id": "7f445b2c8dca02d5",
+        "type": "inject",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Mock temperature",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 160,
+        "y": 560,
+        "wires": [
+            [
+                "03c002d7d9fbe3b2"
+            ]
+        ]
+    },
+    {
+        "id": "03c002d7d9fbe3b2",
+        "type": "function",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Generate mock temperature",
+        "func": "msg.payload = Number((20 + Math.random() * 12).toFixed(1));\nmsg.topic = \"Temperature\";\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 560,
+        "wires": [
+            [
+                "51b891de30965dfb",
+                "8aebb6bfd6f53758",
+                "4b65f4dadeec7b42"
+            ]
+        ]
+    },
+    {
+        "id": "52ec85d6975574c1",
+        "type": "inject",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Mock humidity",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 160,
+        "y": 620,
+        "wires": [
+            [
+                "0806c4edb4d46c21"
+            ]
+        ]
+    },
+    {
+        "id": "0806c4edb4d46c21",
+        "type": "function",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Generate mock humidity",
+        "func": "msg.payload = Number((45 + Math.random() * 30).toFixed(1));\nmsg.topic = \"Humidity\";\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 410,
+        "y": 620,
+        "wires": [
+            [
+                "3b999b5a89a5b6d2",
+                "8aebb6bfd6f53758",
+                "615f91b1551d3d31"
+            ]
+        ]
+    },
+    {
+        "id": "4b65f4dadeec7b42",
+        "type": "debug",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Debug temperature",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 710,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "615f91b1551d3d31",
+        "type": "debug",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Debug humidity",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 710,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "a1695cae95094ae9",
+        "type": "debug",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Debug servo command",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 710,
+        "y": 440,
+        "wires": []
+    },
+    {
+        "id": "239455e51d9afcdd",
+        "type": "debug",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Debug servo state",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 710,
+        "y": 500,
+        "wires": []
+    },
+    {
+        "id": "54eb042d29b9ba4c",
+        "type": "mqtt in",
+        "z": "b17a4b2254ba0ffe",
+        "name": "MQTT in: RTC time",
+        "topic": "week6/HealthyHome/sensor/rtc",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "wk06_mqtt_hivemq",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 170,
+        "y": 700,
+        "wires": [
+            [
+                "b0b22b62082c7844"
+            ]
+        ]
+    },
+    {
+        "id": "b0b22b62082c7844",
+        "type": "function",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Parse RTC time",
+        "func": "const value = String(msg.payload);\nif (!value) { node.warn('Invalid RTC payload'); return null; }\nmsg.payload = value;\nmsg.topic = 'RTC Time';\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 440,
+        "y": 700,
+        "wires": [
+            [
+                "b70bd445fc8f8d1c"
+            ]
+        ]
+    },
+    {
+        "id": "b70bd445fc8f8d1c",
+        "type": "ui-text",
+        "z": "b17a4b2254ba0ffe",
+        "group": "74437f4126d428e0",
+        "order": 1,
+        "width": 6,
+        "height": 1,
+        "name": "RTC Time Text",
+        "label": "RTC time",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "Helvetica",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "value": "payload",
+        "valueType": "msg",
+        "x": 780,
+        "y": 700,
+        "wires": []
+    },
+    {
+        "id": "4964f3a61a3cb084",
+        "type": "mqtt in",
+        "z": "b17a4b2254ba0ffe",
+        "name": "MQTT in: LDR",
+        "topic": "week6/HealthyHome/sensor/ldr",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "wk06_mqtt_hivemq",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 170,
+        "y": 760,
+        "wires": [
+            [
+                "16fd53864acff673"
+            ]
+        ]
+    },
+    {
+        "id": "16fd53864acff673",
+        "type": "function",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Parse LDR",
+        "func": "const value = Number(msg.payload);\nif (Number.isNaN(value)) { node.warn(`Invalid LDR payload: ${msg.payload}`); return null; }\nmsg.payload = value;\nmsg.topic = 'LDR';\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 430,
+        "y": 760,
+        "wires": [
+            [
+                "e14c4f422df6589d",
+                "ccf508174563c14e",
+                "55a7e8f1b4b7c126"
+            ]
+        ]
+    },
+    {
+        "id": "e14c4f422df6589d",
+        "type": "ui-text",
+        "z": "b17a4b2254ba0ffe",
+        "group": "74437f4126d428e0",
+        "order": 2,
+        "width": 6,
+        "height": 1,
+        "name": "LDR Text",
+        "label": "LDR light level",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "Helvetica",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "value": "payload",
+        "valueType": "msg",
+        "x": 760,
+        "y": 760,
+        "wires": []
+    },
+    {
+        "id": "77df2f0b0b58673b",
+        "type": "mqtt in",
+        "z": "b17a4b2254ba0ffe",
+        "name": "MQTT in: PIR",
+        "topic": "week6/HealthyHome/sensor/pir",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "wk06_mqtt_hivemq",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 170,
+        "y": 820,
+        "wires": [
+            [
+                "6475ddd94ec80a4c"
+            ]
+        ]
+    },
+    {
+        "id": "6475ddd94ec80a4c",
+        "type": "function",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Parse PIR",
+        "func": "const value = String(msg.payload).toUpperCase();\nmsg.payload = (value === '1' || value === 'HIGH' || value === 'TRUE' || value === 'MOTION') ? 'Motion detected' : 'No motion';\nmsg.topic = 'PIR';\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 430,
+        "y": 820,
+        "wires": [
+            [
+                "7d83a27ceb72379e"
+            ]
+        ]
+    },
+    {
+        "id": "7d83a27ceb72379e",
+        "type": "ui-text",
+        "z": "b17a4b2254ba0ffe",
+        "group": "wk06_group_sensor",
+        "order": 4,
+        "width": 6,
+        "height": 1,
+        "name": "PIR Text",
+        "label": "PIR status",
+        "format": "{{msg.payload}}",
+        "layout": "col-center",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "value": "payload",
+        "valueType": "msg",
+        "x": 760,
+        "y": 820,
+        "wires": []
+    },
+    {
+        "id": "85fb48c295141928",
+        "type": "ui-switch",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Alarm Switch",
+        "label": "Buzzer / Alarm",
+        "group": "4b08cf5c58b5246a",
+        "order": 3,
+        "width": "6",
+        "height": 1,
+        "passthru": true,
+        "decouple": false,
+        "topic": "week6/HealthyHome/actuator/alarm/set",
+        "topicType": "str",
+        "style": "",
+        "className": "",
+        "layout": "",
+        "clickableArea": "switch",
+        "onvalue": "1",
+        "onvalueType": "str",
+        "onicon": "",
+        "oncolor": "",
+        "offvalue": "0",
+        "offvalueType": "str",
+        "officon": "",
+        "offcolor": "",
+        "x": 170,
+        "y": 1440,
+        "wires": [
+            [
+                "f8f892de94b8a88d"
+            ]
+        ]
+    },
+    {
+        "id": "f8f892de94b8a88d",
+        "type": "mqtt out",
+        "z": "b17a4b2254ba0ffe",
+        "name": "MQTT out: Buzzer / Alarm",
+        "topic": "week6/HealthyHome/actuator/buzzer/set",
+        "qos": "0",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "wk06_mqtt_hivemq",
+        "x": 470,
+        "y": 1440,
+        "wires": []
+    },
+    {
+        "id": "6f2f088ecdc33e5b",
+        "type": "ui-switch",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Heat LED Switch",
+        "label": "Heat LED Switch",
+        "group": "4b08cf5c58b5246a",
+        "order": 4,
+        "width": "6",
+        "height": 1,
+        "passthru": true,
+        "decouple": false,
+        "topic": "week6/HealthyHome/actuator/led1/set",
+        "topicType": "str",
+        "style": "",
+        "className": "",
+        "layout": "",
+        "clickableArea": "switch",
+        "onvalue": "1",
+        "onvalueType": "str",
+        "onicon": "",
+        "oncolor": "",
+        "offvalue": "0",
+        "offvalueType": "str",
+        "officon": "",
+        "offcolor": "",
+        "x": 190,
+        "y": 1180,
+        "wires": [
+            [
+                "05d07f9f09fa28a4"
+            ]
+        ]
+    },
+    {
+        "id": "05d07f9f09fa28a4",
+        "type": "mqtt out",
+        "z": "b17a4b2254ba0ffe",
+        "name": "MQTT out: Heat LED",
+        "topic": "week6/HealthyHome/actuator/heat_led/set",
+        "qos": "0",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "wk06_mqtt_hivemq",
+        "x": 460,
+        "y": 1180,
+        "wires": []
+    },
+    {
+        "id": "d220e93100f019d9",
+        "type": "ui-switch",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Cool LED Switch",
+        "label": "Cool LED Switch",
+        "group": "4b08cf5c58b5246a",
+        "order": 5,
+        "width": "6",
+        "height": 1,
+        "passthru": true,
+        "decouple": false,
+        "topic": "week6/HealthyHome/actuator/led2/set",
+        "topicType": "str",
+        "style": "",
+        "className": "",
+        "layout": "",
+        "clickableArea": "switch",
+        "onvalue": "1",
+        "onvalueType": "str",
+        "onicon": "",
+        "oncolor": "",
+        "offvalue": "0",
+        "offvalueType": "str",
+        "officon": "",
+        "offcolor": "",
+        "x": 190,
+        "y": 1240,
+        "wires": [
+            [
+                "d624601a6bbb051d"
+            ]
+        ]
+    },
+    {
+        "id": "d624601a6bbb051d",
+        "type": "mqtt out",
+        "z": "b17a4b2254ba0ffe",
+        "name": "MQTT out: Cool LED",
+        "topic": "week6/HealthyHome/actuator/cool_led/set",
+        "qos": "0",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "wk06_mqtt_hivemq",
+        "x": 460,
+        "y": 1240,
+        "wires": []
+    },
+    {
+        "id": "9f3380976fec2108",
+        "type": "ui-switch",
+        "z": "b17a4b2254ba0ffe",
+        "name": "PIR LED Switch",
+        "label": "PIR LED Switch",
+        "group": "4b08cf5c58b5246a",
+        "order": 6,
+        "width": "6",
+        "height": 1,
+        "passthru": true,
+        "decouple": false,
+        "topic": "week6/HealthyHome/actuator/led3/set",
+        "topicType": "str",
+        "style": "",
+        "className": "",
+        "layout": "",
+        "clickableArea": "switch",
+        "onvalue": "1",
+        "onvalueType": "str",
+        "onicon": "",
+        "oncolor": "",
+        "offvalue": "0",
+        "offvalueType": "str",
+        "officon": "",
+        "offcolor": "",
+        "x": 180,
+        "y": 1300,
+        "wires": [
+            [
+                "5b3cfabed46646bf"
+            ]
+        ]
+    },
+    {
+        "id": "5b3cfabed46646bf",
+        "type": "mqtt out",
+        "z": "b17a4b2254ba0ffe",
+        "name": "MQTT out: PIR LED",
+        "topic": "week6/HealthyHome/actuator/pir_led/set",
+        "qos": "0",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "wk06_mqtt_hivemq",
+        "x": 460,
+        "y": 1300,
+        "wires": []
+    },
+    {
+        "id": "43ba6fc7217df9e0",
+        "type": "ui-switch",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Bright LED Switch",
+        "label": "Bright LED",
+        "group": "4b08cf5c58b5246a",
+        "order": 7,
+        "width": "6",
+        "height": 1,
+        "passthru": true,
+        "decouple": false,
+        "topic": "week6/HealthyHome/actuator/led4/set",
+        "topicType": "str",
+        "style": "",
+        "className": "",
+        "layout": "",
+        "clickableArea": "switch",
+        "onvalue": "1",
+        "onvalueType": "str",
+        "onicon": "",
+        "oncolor": "",
+        "offvalue": "0",
+        "offvalueType": "str",
+        "officon": "",
+        "offcolor": "",
+        "x": 190,
+        "y": 1360,
+        "wires": [
+            [
+                "159e6b909cbc86a6"
+            ]
+        ]
+    },
+    {
+        "id": "159e6b909cbc86a6",
+        "type": "mqtt out",
+        "z": "b17a4b2254ba0ffe",
+        "name": "MQTT out: Bright LED",
+        "topic": "week6/HealthyHome/actuator/bright_led/set",
+        "qos": "0",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "wk06_mqtt_hivemq",
+        "x": 460,
+        "y": 1360,
+        "wires": []
+    },
+    {
+        "id": "422b48919e84b797",
+        "type": "mqtt in",
+        "z": "b17a4b2254ba0ffe",
+        "name": "MQTT in: Alarm state",
+        "topic": "week6/HealthyHome/actuator/buzzer/state",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "wk06_mqtt_hivemq",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 200,
+        "y": 1120,
+        "wires": [
+            [
+                "1be6b7be43124b6e"
+            ]
+        ]
+    },
+    {
+        "id": "1be6b7be43124b6e",
+        "type": "function",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Parse Alarm state",
+        "func": "msg.payload = String(msg.payload); msg.topic = 'Alarm State'; return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 450,
+        "y": 1120,
+        "wires": [
+            [
+                "e754725014d7c997"
+            ]
+        ]
+    },
+    {
+        "id": "e754725014d7c997",
+        "type": "ui-text",
+        "z": "b17a4b2254ba0ffe",
+        "group": "wk06_group_sensor",
+        "order": 5,
+        "width": 6,
+        "height": 1,
+        "name": "Alarm State Text",
+        "label": "Alarm state",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "value": "payload",
+        "valueType": "msg",
+        "x": 780,
+        "y": 1120,
+        "wires": []
+    },
+    {
+        "id": "4ec309e8d6523f1c",
+        "type": "mqtt in",
+        "z": "b17a4b2254ba0ffe",
+        "name": "MQTT in: PIR LED",
+        "topic": "week6/HealthyHome/actuator/pir_led/state",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "wk06_mqtt_hivemq",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 190,
+        "y": 880,
+        "wires": [
+            [
+                "1978f811c096b180"
+            ]
+        ]
+    },
+    {
+        "id": "1978f811c096b180",
+        "type": "function",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Parse PIR LED state",
+        "func": "msg.payload = String(msg.payload); msg.topic = 'LED 1 State'; return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 460,
+        "y": 880,
+        "wires": [
+            [
+                "f1b0a15ea339e4d0"
+            ]
+        ]
+    },
+    {
+        "id": "f1b0a15ea339e4d0",
+        "type": "ui-text",
+        "z": "b17a4b2254ba0ffe",
+        "group": "wk06_group_sensor",
+        "order": 6,
+        "width": 6,
+        "height": 1,
+        "name": "LED 1 State Text",
+        "label": "LED 1 state",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "value": "payload",
+        "valueType": "msg",
+        "x": 790,
+        "y": 880,
+        "wires": []
+    },
+    {
+        "id": "0a9ae6fd27da12af",
+        "type": "mqtt in",
+        "z": "b17a4b2254ba0ffe",
+        "name": "MQTT in: Heat LED",
+        "topic": "week6/HealthyHome/actuator/heat_led/state",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "wk06_mqtt_hivemq",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 190,
+        "y": 940,
+        "wires": [
+            [
+                "2f35455cf685a7f9"
+            ]
+        ]
+    },
+    {
+        "id": "2f35455cf685a7f9",
+        "type": "function",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Parse Heat LED state",
+        "func": "msg.payload = String(msg.payload); msg.topic = 'LED 2 State'; return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 460,
+        "y": 940,
+        "wires": [
+            [
+                "5cd104ee02a42d34"
+            ]
+        ]
+    },
+    {
+        "id": "5cd104ee02a42d34",
+        "type": "ui-text",
+        "z": "b17a4b2254ba0ffe",
+        "group": "wk06_group_sensor",
+        "order": 7,
+        "width": 6,
+        "height": 1,
+        "name": "Heat LED State",
+        "label": "Heat LED State",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "value": "payload",
+        "valueType": "msg",
+        "x": 780,
+        "y": 940,
+        "wires": []
+    },
+    {
+        "id": "b8ae23f6cc0ff846",
+        "type": "mqtt in",
+        "z": "b17a4b2254ba0ffe",
+        "name": "MQTT in: Cool LED",
+        "topic": "week6/HealthyHome/actuator/cool_led/state",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "wk06_mqtt_hivemq",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 190,
+        "y": 1000,
+        "wires": [
+            [
+                "eefd05d3c6897d6c"
+            ]
+        ]
+    },
+    {
+        "id": "eefd05d3c6897d6c",
+        "type": "function",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Parse Cool LED state",
+        "func": "msg.payload = String(msg.payload); msg.topic = 'LED 3 State'; return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 460,
+        "y": 1000,
+        "wires": [
+            [
+                "c7fedff672c8db52"
+            ]
+        ]
+    },
+    {
+        "id": "c7fedff672c8db52",
+        "type": "ui-text",
+        "z": "b17a4b2254ba0ffe",
+        "group": "wk06_group_sensor",
+        "order": 9,
+        "width": 6,
+        "height": 1,
+        "name": "Cool LED State",
+        "label": "Cool LED state",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "value": "payload",
+        "valueType": "msg",
+        "x": 780,
+        "y": 1000,
+        "wires": []
+    },
+    {
+        "id": "a3c48afb5f480a65",
+        "type": "mqtt in",
+        "z": "b17a4b2254ba0ffe",
+        "name": "MQTT in: Bright LED state",
+        "topic": "week6/HealthyHome/actuator/bright_led/state",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "wk06_mqtt_hivemq",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 210,
+        "y": 1060,
+        "wires": [
+            [
+                "ed74f8eeee87b7cd"
+            ]
+        ]
+    },
+    {
+        "id": "ed74f8eeee87b7cd",
+        "type": "function",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Parse Bright LED state",
+        "func": "msg.payload = String(msg.payload); msg.topic = 'LED 4 State'; return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 460,
+        "y": 1060,
+        "wires": [
+            [
+                "596c938b185d8d77"
+            ]
+        ]
+    },
+    {
+        "id": "596c938b185d8d77",
+        "type": "ui-text",
+        "z": "b17a4b2254ba0ffe",
+        "group": "wk06_group_sensor",
+        "order": 8,
+        "width": 6,
+        "height": 1,
+        "name": "Bright LED State",
+        "label": "Bright LED state",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "value": "payload",
+        "valueType": "msg",
+        "x": 790,
+        "y": 1060,
+        "wires": []
+    },
+    {
+        "id": "a67294ae4699bbc9",
+        "type": "comment",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Healthy Home hardware",
+        "info": "Hardware represented by MQTT topics:\\nDHT22: temperature + humidity\\nRTC: time\\nLDR: light level\\nPIR: motion\\nBuzzer/alarm: alarm/set\\nLEDs: led1/set through led4/set\\nServo: servo/set (existing slider)\\n\\nESP32 should publish sensor/state topics and subscribe to actuator/set topics.",
+        "x": 190,
+        "y": 1580,
+        "wires": []
+    },
+    {
+        "id": "ccf508174563c14e",
+        "type": "ui-gauge",
+        "z": "b17a4b2254ba0ffe",
+        "name": "LDR Guage",
+        "group": "wk06_group_sensor",
+        "order": 1,
+        "value": "payload",
+        "valueType": "msg",
+        "width": 3,
+        "height": 3,
+        "gtype": "gauge-half",
+        "gstyle": "needle",
+        "title": "gauge",
+        "alwaysShowTitle": false,
+        "floatingTitlePosition": "top-left",
+        "units": "units",
+        "icon": "",
+        "prefix": "",
+        "suffix": "",
+        "segments": [
+            {
+                "from": "0",
+                "color": "#5cd65c",
+                "text": "",
+                "textType": "label"
+            },
+            {
+                "from": "4",
+                "color": "#ffc800",
+                "text": "",
+                "textType": "label"
+            },
+            {
+                "from": "7",
+                "color": "#ea5353",
+                "text": "",
+                "textType": "label"
+            }
+        ],
+        "min": 0,
+        "max": "4000",
+        "sizeThickness": 16,
+        "sizeGap": 4,
+        "sizeKeyThickness": 8,
+        "styleRounded": true,
+        "styleGlow": false,
+        "className": "",
+        "x": 770,
+        "y": 600,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "55a7e8f1b4b7c126",
+        "type": "ui-chart",
+        "z": "b17a4b2254ba0ffe",
+        "group": "wk06_group_chart",
+        "name": "LDR Chart",
+        "label": "LDR",
+        "order": 2,
+        "chartType": "line",
+        "category": "topic",
+        "categoryType": "msg",
+        "xAxisLabel": "",
+        "xAxisProperty": "",
+        "xAxisPropertyType": "timestamp",
+        "xAxisType": "time",
+        "xAxisFormat": "",
+        "xAxisFormatType": "auto",
+        "xmin": "",
+        "xmax": "",
+        "yAxisLabel": "",
+        "yAxisProperty": "payload",
+        "yAxisPropertyType": "msg",
+        "ymin": "",
+        "ymax": "",
+        "bins": 10,
+        "action": "append",
+        "stackSeries": false,
+        "pointShape": "circle",
+        "pointRadius": 4,
+        "showLegend": true,
+        "removeOlder": 1,
+        "removeOlderUnit": "3600",
+        "removeOlderPoints": "",
+        "colors": [
+            "#0095ff",
+            "#ff0000",
+            "#ff7f0e",
+            "#2ca02c",
+            "#a347e1",
+            "#d62728",
+            "#ff9896",
+            "#9467bd",
+            "#c5b0d5"
+        ],
+        "textColor": [
+            "#666666"
+        ],
+        "textColorDefault": true,
+        "gridColor": [
+            "#e5e5e5"
+        ],
+        "gridColorDefault": true,
+        "width": 6,
+        "height": 8,
+        "className": "",
+        "interpolation": "linear",
+        "x": 770,
+        "y": 640,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "1357603d2e159c84",
+        "type": "mqtt in",
+        "z": "b17a4b2254ba0ffe",
+        "name": "MQTT in: Mode State",
+        "topic": "week6/HealthyHome/mode/set",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "wk06_mqtt_hivemq",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 200,
+        "y": 1500,
+        "wires": [
+            [
+                "f957a7e615a652d4"
+            ]
+        ]
+    },
+    {
+        "id": "f957a7e615a652d4",
+        "type": "function",
+        "z": "b17a4b2254ba0ffe",
+        "name": "function 1",
+        "func": "msg.payload = (msg.payload === 'true' || msg.payload === true);\nmsg.topic = 'Mode State';\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 1500,
+        "wires": [
+            [
+                "fb12f97b0d9da101"
+            ]
+        ]
+    },
+    {
+        "id": "fb12f97b0d9da101",
+        "type": "ui-switch",
+        "z": "b17a4b2254ba0ffe",
+        "name": "Custom Mode Switch",
+        "label": "Custom Mode",
+        "group": "4b08cf5c58b5246a",
+        "order": 1,
+        "width": "0",
+        "height": "0",
+        "passthru": false,
+        "decouple": false,
+        "topic": "topic",
+        "topicType": "msg",
+        "style": "",
+        "className": "",
+        "layout": "row-spread",
+        "clickableArea": "switch",
+        "onvalue": "true",
+        "onvalueType": "bool",
+        "onicon": "",
+        "oncolor": "",
+        "offvalue": "false",
+        "offvalueType": "bool",
+        "officon": "",
+        "offcolor": "",
+        "x": 660,
+        "y": 1500,
+        "wires": [
+            [
+                "57483ab62337ed51"
+            ]
+        ]
+    },
+    {
+        "id": "57483ab62337ed51",
+        "type": "mqtt out",
+        "z": "b17a4b2254ba0ffe",
+        "name": "MQTT out: Custom Mode",
+        "topic": "week6/HealthyHome/mode/set",
+        "qos": "",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "wk06_mqtt_hivemq",
+        "x": 950,
+        "y": 1500,
+        "wires": []
+    },
+    {
+        "id": "6afcbf756d7136a9",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "@flowfuse/node-red-dashboard": "1.31.0"
+        }
+    }
+]
