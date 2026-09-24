@@ -3,6 +3,7 @@
 #include "mqtt_topics.h"
 #include "pins.h"
 #include "servo_control.h"
+#include "shared_state.h"
 
 bool buzzerState = false;
 
@@ -115,5 +116,29 @@ void PublishServoState()
 
     Serial.print("Published servo state to MQTT: ");
     Serial.println(servoAngleText);
+  }
+}
+
+void PublishModeState()
+{
+  // A manual actuator command flips customMode on its own, so the dashboard
+  // can only stay in sync if the device announces the mode rather than
+  // assuming its own switch caused it. Retained so a reconnecting dashboard
+  // picks up the current mode immediately.
+  static int lastPublished = -1;
+
+  const int current = customMode ? 1 : 0;
+
+  if (current == lastPublished)
+  {
+    return;
+  }
+
+  if (mqttClient.publish(MQTT_MODE_STATE_TOPIC, customMode ? "true" : "false", true))
+  {
+    lastPublished = current;
+
+    Serial.print("Published mode state to MQTT: ");
+    Serial.println(customMode ? "true" : "false");
   }
 }

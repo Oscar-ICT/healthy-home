@@ -25,3 +25,4 @@ const char *MQTT_COOLLED_STATE_TOPIC = "week6/HealthyHome/actuator/cool_led/stat
 const char *MQTT_BRIGHTLED_STATE_TOPIC = "week6/HealthyHome/actuator/bright_led/state";
 const char *MQTT_BUZZER_STATE_TOPIC = "week6/HealthyHome/actuator/buzzer/state";
 const char *MQTT_MODE_TOPIC = "week6/HealthyHome/mode/set";
+const char *MQTT_MODE_STATE_TOPIC = "week6/HealthyHome/mode/state";

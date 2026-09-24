@@ -9,3 +9,4 @@ void PublishDhtReadings(float temperature, float humidity);
 void PublishPirReading(int pirValue);
 void PublishLdrReading(int ldrValue);
 void PublishServoState();
+void PublishModeState();

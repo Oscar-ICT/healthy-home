@@ -39,6 +39,16 @@ void CallbackMqtt(char *topic, byte *payload, unsigned int length)
       return;
     }
 
+    // A manual angle only means something if the automatic time-of-day
+    // logic in loop() isn't also driving the servo, so switch to custom
+    // mode here rather than requiring a separate mode command first -
+    // otherwise the automatic logic silently reverts this within ~2s.
+    if (!customMode)
+    {
+      customMode = true;
+      Serial.println("CUSTOM MODE ON (manual servo command)");
+    }
+
     SetServoAngle(static_cast<int>(requestedAngle));
 
     return;
@@ -50,11 +60,21 @@ void CallbackMqtt(char *topic, byte *payload, unsigned int length)
   {
     if (strcmp(message, "1") == 0)
     {
+      if (!customMode)
+      {
+        customMode = true;
+        Serial.println("CUSTOM MODE ON (manual PIR LED command)");
+      }
       digitalWrite(PIRLEDPIN, HIGH);
       Serial.println("PIR LED ON");
     }
     else if (strcmp(message, "0") == 0)
     {
+      if (!customMode)
+      {
+        customMode = true;
+        Serial.println("CUSTOM MODE ON (manual PIR LED command)");
+      }
       digitalWrite(PIRLEDPIN, LOW);
       Serial.println("PIR LED OFF");
     }
@@ -70,11 +90,21 @@ void CallbackMqtt(char *topic, byte *payload, unsigned int length)
   {
     if (strcmp(message, "1") == 0)
     {
+      if (!customMode)
+      {
+        customMode = true;
+        Serial.println("CUSTOM MODE ON (manual heat LED command)");
+      }
       digitalWrite(HOTLEDPIN, HIGH);
       Serial.println("Heat LED ON");
     }
     else if (strcmp(message, "0") == 0)
     {
+      if (!customMode)
+      {
+        customMode = true;
+        Serial.println("CUSTOM MODE ON (manual heat LED command)");
+      }
       digitalWrite(HOTLEDPIN, LOW);
       Serial.println("Heat LED OFF");
     }
@@ -90,11 +120,21 @@ void CallbackMqtt(char *topic, byte *payload, unsigned int length)
   {
     if (strcmp(message, "1") == 0)
     {
+      if (!customMode)
+      {
+        customMode = true;
+        Serial.println("CUSTOM MODE ON (manual cool LED command)");
+      }
       digitalWrite(COLDLEDPIN, HIGH);
       Serial.println("Cool LED ON");
     }
     else if (strcmp(message, "0") == 0)
     {
+      if (!customMode)
+      {
+        customMode = true;
+        Serial.println("CUSTOM MODE ON (manual cool LED command)");
+      }
       digitalWrite(COLDLEDPIN, LOW);
       Serial.println("Cool LED OFF");
     }
@@ -110,11 +150,21 @@ void CallbackMqtt(char *topic, byte *payload, unsigned int length)
   {
     if (strcmp(message, "1") == 0)
     {
+      if (!customMode)
+      {
+        customMode = true;
+        Serial.println("CUSTOM MODE ON (manual bright LED command)");
+      }
       analogWrite(PWMPIN, 255);
       Serial.println("Bright LED ON");
     }
     else if (strcmp(message, "0") == 0)
     {
+      if (!customMode)
+      {
+        customMode = true;
+        Serial.println("CUSTOM MODE ON (manual bright LED command)");
+      }
       analogWrite(PWMPIN, 0);
       Serial.println("Bright LED OFF");
     }
@@ -130,11 +180,21 @@ void CallbackMqtt(char *topic, byte *payload, unsigned int length)
   {
     if (strcmp(message, "1") == 0)
     {
+      if (!customMode)
+      {
+        customMode = true;
+        Serial.println("CUSTOM MODE ON (manual buzzer command)");
+      }
       tone(BUZZERPIN, 500);
       Serial.println("Buzzer ON");
     }
     else if (strcmp(message, "0") == 0)
     {
+      if (!customMode)
+      {
+        customMode = true;
+        Serial.println("CUSTOM MODE ON (manual buzzer command)");
+      }
       noTone(BUZZERPIN);
       Serial.println("Buzzer OFF");
     }

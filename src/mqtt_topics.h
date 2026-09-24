@@ -26,3 +26,4 @@ extern const char *MQTT_COOLLED_STATE_TOPIC;
 extern const char *MQTT_BRIGHTLED_STATE_TOPIC;
 extern const char *MQTT_BUZZER_STATE_TOPIC;
 extern const char *MQTT_MODE_TOPIC;
+extern const char *MQTT_MODE_STATE_TOPIC;

@@ -59,7 +59,12 @@ void setup() {
   //LDR pins
   pinMode(LDRPIN, INPUT);
 
-  //Buzzer pin
+  //Buzzer pin. tone() defaults to LEDC channel 0, which is the same channel
+  //ESP32Servo hands the servo - firing the alarm re-routes channel 0's output
+  //from the servo pin to the buzzer and never routes it back, leaving the
+  //servo frozen while write() keeps silently updating currentServoAngle.
+  //Channel 4 is unclaimed: the servo takes 0, analogWrite allocates from 15 down.
+  setToneChannel(4);
   pinMode(BUZZERPIN, OUTPUT);
 
   //Occupancy calibration button
@@ -326,6 +331,7 @@ void loop() {
   mqttClient.loop();
 
   PublishServoState();
+  PublishModeState();
   SetActuatorStates();
 
   const unsigned long nowMQTT = millis();
