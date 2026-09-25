@@ -234,7 +234,7 @@ void loop() {
 
   //Rising: fade the light up across the hour, driven by the clock
   //itself rather than a per-loop increment (see fadeLevel() above).
-  if(!customMode){
+  if(!customMode && !aiMode){
     if (timeState == rising) {
       alarmFiredThisCycle = false; //arm the wake alarm for this lap
       pwmval = fadeLevel(now, true);
